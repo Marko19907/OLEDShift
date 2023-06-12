@@ -106,11 +106,23 @@ int main()
     // Seed the random number generator
     srand(static_cast<unsigned int>(time(NULL)));
 
+    std::cout << "Enter the interval in milliseconds: ";
+
+    int interval = 0;
+    std::cin >> interval;
+
+    while (std::cin.fail() || interval <= 0) {
+        std::cout << "Bad entry. Enter a positive number: " << std::endl;
+        std::cin.clear();
+        std::cin.ignore(100000, '\n');
+        std::cin >> interval;
+    }
+
     // Enumerate all windows
     EnumWindows(EnumWindowsProc, 0);
 
     // Set a timer with an interval of 2000 ms (2 seconds)
-    UINT_PTR timerId = SetTimer(NULL, 0, 2000, TimerProc);
+    UINT_PTR timerId = SetTimer(NULL, 0, interval, TimerProc);
 
     if (timerId == 0)
     {
