@@ -76,8 +76,8 @@ BOOL CALLBACK EnumWindowsProc(HWND hWnd, LPARAM lParam)
                 randomY = min(randomY, monitorInfo.rcMonitor.bottom - windowHeight - taskbarHeight);
             }
 
-            std::cout << "Taskbar hidden: " << (isTaskbarAutoHidden() ? "true" : "false") << "\n";
-            std::cout << "Taskbar height: " << getTaskbarHeight() << "px \n";
+            // std::cout << "Taskbar hidden: " << (isTaskbarAutoHidden() ? "true" : "false") << "\n";
+            // std::cout << "Taskbar height: " << getTaskbarHeight() << "px \n";
 
             // Move the window to the random position
             SetWindowPos(hWnd, HWND_TOP, randomX, randomY, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
@@ -85,7 +85,7 @@ BOOL CALLBACK EnumWindowsProc(HWND hWnd, LPARAM lParam)
             // Animate the window movement
             if (!AnimateWindow(hWnd, 4000, AW_CENTER))
             {
-                std::cerr << "Failed to animate window movement: " << GetLastError() << std::endl;
+                // std::cerr << "Failed to animate window movement: " << GetLastError() << std::endl;
             }
         }
     }
@@ -99,6 +99,7 @@ void CALLBACK TimerProc(HWND hWnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime)
 {
     // Enumerate all windows and move non-maximized ones
     EnumWindows(EnumWindowsProc, 0);
+    std::cout << "Moved all non-maximized windows at " << dwTime << std::endl;
 }
 
 int main()
