@@ -7,6 +7,7 @@ pub struct SystemTray {
     tray_item1: nwg::MenuItem,
     tray_item2: nwg::MenuItem,
     tray_item3: nwg::MenuItem,
+    separator: nwg::MenuSeparator,
 }
 
 impl SystemTray {
@@ -78,6 +79,10 @@ mod system_tray_ui {
                 .text("Popup")
                 .parent(&data.tray_menu)
                 .build(&mut data.tray_item2)?;
+
+            nwg::MenuSeparator::builder()
+                .parent(&data.tray_menu)
+                .build(&mut data.separator)?;
 
             nwg::MenuItem::builder()
                 .text("Exit")
