@@ -4,6 +4,7 @@ pub struct SystemTray {
     icon: nwg::Icon,
     tray: nwg::TrayNotification,
     tray_menu: nwg::Menu,
+    enabled_toggle: nwg::MenuItem,
     tray_item1: nwg::MenuItem,
     tray_item2: nwg::MenuItem,
     tray_item3: nwg::MenuItem,
@@ -71,12 +72,18 @@ mod system_tray_ui {
                 .build(&mut data.tray_menu)?;
 
             nwg::MenuItem::builder()
-                .text("Hello")
+                .text("Enabled")
+                .check(true)
+                .parent(&data.tray_menu)
+                .build(&mut data.enabled_toggle)?;
+
+            nwg::MenuItem::builder()
+                .text("Delay")
                 .parent(&data.tray_menu)
                 .build(&mut data.tray_item1)?;
 
             nwg::MenuItem::builder()
-                .text("Popup")
+                .text("Set max distance")
                 .parent(&data.tray_menu)
                 .build(&mut data.tray_item2)?;
 
