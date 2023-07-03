@@ -11,6 +11,7 @@ use nwg::NativeUi;
 use view::SystemTray;
 
 mod view;
+mod mover;
 
 
 fn main() {
