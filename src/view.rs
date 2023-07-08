@@ -1,3 +1,6 @@
+use std::sync::{Arc, Mutex};
+use crate::controller::Controller;
+
 #[derive(Default)]
 pub struct SystemTray {
     window: nwg::MessageWindow,
@@ -9,12 +12,28 @@ pub struct SystemTray {
     tray_item2: nwg::MenuItem,
     tray_item3: nwg::MenuItem,
     separator: nwg::MenuSeparator,
+    controller: Arc<Mutex<Controller>>,
 }
 
 impl SystemTray {
+
+    fn new(&self) -> Self {
+        let controller = Arc::new(Mutex::new(Controller::new()));
+
+        return SystemTray {
+            controller,
+            ..Default::default()
+        }
+    }
+
     fn show_menu(&self) {
         let (x, y) = nwg::GlobalCursor::position();
         self.tray_menu.popup(x, y);
+    }
+
+    fn toggle_enabled(&self) {
+        println!("Toggling enabled called");
+        self.controller.lock().unwrap().toggle_running();
     }
 
     fn hello1(&self) {
@@ -40,6 +59,7 @@ mod system_tray_ui {
     use std::rc::Rc;
     use std::cell::RefCell;
     use std::ops::Deref;
+    use crate::controller::Controller;
     use crate::view::SystemTray;
 
     pub struct SystemTrayUi {
@@ -102,6 +122,9 @@ mod system_tray_ui {
                 default_handler: Default::default(),
             };
 
+            // Start the controller
+            Controller::run(ui.inner.controller.clone());
+
             // Events
             let evt_ui = Rc::downgrade(&ui.inner);
             let handle_events = move |evt, _evt_data, handle| {
@@ -112,7 +135,10 @@ mod system_tray_ui {
                                 SystemTray::show_menu(&evt_ui);
                             }
                         E::OnMenuItemSelected =>
-                            if &handle == &evt_ui.tray_item1 {
+                            if &handle == &evt_ui.enabled_toggle {
+                                SystemTray::toggle_enabled(&evt_ui);
+                            }
+                            else if &handle == &evt_ui.tray_item1 {
                                 SystemTray::hello1(&evt_ui);
                             } else if &handle == &evt_ui.tray_item2 {
                                 SystemTray::hello2(&evt_ui);
