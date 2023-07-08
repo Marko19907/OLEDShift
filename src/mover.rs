@@ -104,6 +104,14 @@ unsafe extern "system" fn timer_proc(_: HWND, _: UINT, _: UINT_PTR, _: DWORD) {
     EnumWindows(Some(enum_windows_proc), 0);
 }
 
+/// Moves the windows just once.
+pub fn run() {
+    unsafe {
+        EnumWindows(Some(enum_windows_proc), 0);
+    }
+    return;
+}
+
 pub fn main() {
     unsafe {
         let _seed = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
