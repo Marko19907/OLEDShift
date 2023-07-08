@@ -12,6 +12,7 @@ use view::SystemTray;
 
 mod view;
 mod mover;
+mod controller;
 
 
 fn main() {
