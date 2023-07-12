@@ -8,9 +8,9 @@ pub struct SystemTray {
     tray: nwg::TrayNotification,
     tray_menu: nwg::Menu,
     enabled_toggle: nwg::MenuItem,
-    tray_item1: nwg::MenuItem,
-    tray_item2: nwg::MenuItem,
-    tray_item3: nwg::MenuItem,
+    delay_menu: nwg::MenuItem,
+    distance_menu: nwg::MenuItem,
+    exit_menu: nwg::MenuItem,
     separator: nwg::MenuSeparator,
     controller: Arc<Mutex<Controller>>,
 }
@@ -106,12 +106,12 @@ mod system_tray_ui {
             nwg::MenuItem::builder()
                 .text("Delay")
                 .parent(&data.tray_menu)
-                .build(&mut data.tray_item1)?;
+                .build(&mut data.delay_menu)?;
 
             nwg::MenuItem::builder()
                 .text("Set max distance")
                 .parent(&data.tray_menu)
-                .build(&mut data.tray_item2)?;
+                .build(&mut data.distance_menu)?;
 
             nwg::MenuSeparator::builder()
                 .parent(&data.tray_menu)
@@ -120,7 +120,7 @@ mod system_tray_ui {
             nwg::MenuItem::builder()
                 .text("Exit")
                 .parent(&data.tray_menu)
-                .build(&mut data.tray_item3)?;
+                .build(&mut data.exit_menu)?;
 
             // Wrap-up
             let ui = SystemTrayUi {
@@ -144,11 +144,11 @@ mod system_tray_ui {
                             if &handle == &evt_ui.enabled_toggle {
                                 SystemTray::toggle_enabled(&evt_ui);
                             }
-                            else if &handle == &evt_ui.tray_item1 {
+                            else if &handle == &evt_ui.delay_menu {
                                 SystemTray::hello1(&evt_ui);
-                            } else if &handle == &evt_ui.tray_item2 {
+                            } else if &handle == &evt_ui.distance_menu {
                                 SystemTray::hello2(&evt_ui);
-                            } else if &handle == &evt_ui.tray_item3 {
+                            } else if &handle == &evt_ui.exit_menu {
                                 SystemTray::exit(&evt_ui);
                             },
                         _ => {}
