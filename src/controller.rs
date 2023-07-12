@@ -42,6 +42,10 @@ impl Controller {
         self.interval = interval;
     }
 
+    pub fn is_running(&self) -> bool {
+        self.running
+    }
+
     pub fn toggle_running(&mut self) {
         self.running = !self.running;
     }

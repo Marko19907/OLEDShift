@@ -34,6 +34,7 @@ impl SystemTray {
     fn toggle_enabled(&self) {
         println!("Toggling enabled called");
         self.controller.lock().unwrap().toggle_running();
+        self.update_toggle();
     }
 
     fn hello1(&self) {
@@ -43,6 +44,11 @@ impl SystemTray {
     fn hello2(&self) {
         let flags = nwg::TrayNotificationFlags::USER_ICON | nwg::TrayNotificationFlags::LARGE_ICON;
         self.tray.show("Hello World", Some("Welcome to my application"), Some(flags), Some(&self.icon));
+    }
+
+    /// Updates the toggle menu item to reflect the current state of the controller
+    fn update_toggle(&self) {
+        self.enabled_toggle.set_checked(self.controller.lock().unwrap().is_running());
     }
 
     fn exit(&self) {
