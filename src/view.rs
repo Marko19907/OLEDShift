@@ -8,7 +8,12 @@ pub struct SystemTray {
     tray: nwg::TrayNotification,
     tray_menu: nwg::Menu,
     enabled_toggle: nwg::MenuItem,
-    delay_menu: nwg::MenuItem,
+    delay_menu: nwg::Menu,
+    delay_30_menu: nwg::MenuItem,
+    delay_1_menu: nwg::MenuItem,
+    delay_2_menu: nwg::MenuItem,
+    delay_5_menu: nwg::MenuItem,
+    delay_custom_menu: nwg::MenuItem,
     distance_menu: nwg::MenuItem,
     exit_menu: nwg::MenuItem,
     separator: nwg::MenuSeparator,
@@ -29,6 +34,11 @@ impl SystemTray {
     fn show_menu(&self) {
         let (x, y) = nwg::GlobalCursor::position();
         self.tray_menu.popup(x, y);
+    }
+
+    fn show_delay_menu(&self) {
+        let (x, y) = nwg::GlobalCursor::position();
+        self.delay_menu.popup(x, y);
     }
 
     fn toggle_enabled(&self) {
@@ -103,10 +113,39 @@ mod system_tray_ui {
                 .parent(&data.tray_menu)
                 .build(&mut data.enabled_toggle)?;
 
-            nwg::MenuItem::builder()
+            nwg::Menu::builder()
                 .text("Delay")
                 .parent(&data.tray_menu)
                 .build(&mut data.delay_menu)?;
+
+            nwg::MenuItem::builder()
+                .text("30 seconds")
+                .parent(&data.delay_menu)
+                .build(&mut data.delay_30_menu)?;
+
+            nwg::MenuItem::builder()
+                .text("1 minute")
+                .parent(&data.delay_menu)
+                .build(&mut data.delay_1_menu)?;
+
+            nwg::MenuItem::builder()
+                .text("2 minutes")
+                .parent(&data.delay_menu)
+                .build(&mut data.delay_2_menu)?;
+
+            nwg::MenuItem::builder()
+                .text("5 minutes")
+                .parent(&data.delay_menu)
+                .build(&mut data.delay_5_menu)?;
+
+            nwg::MenuSeparator::builder()
+                .parent(&data.delay_menu)
+                .build(&mut data.separator)?;
+
+            nwg::MenuItem::builder()
+                .text("Custom delay")
+                .parent(&data.delay_menu)
+                .build(&mut data.delay_custom_menu)?;
 
             nwg::MenuItem::builder()
                 .text("Set max distance")
@@ -145,7 +184,7 @@ mod system_tray_ui {
                                 SystemTray::toggle_enabled(&evt_ui);
                             }
                             else if &handle == &evt_ui.delay_menu {
-                                SystemTray::hello1(&evt_ui);
+                                SystemTray::show_delay_menu(&evt_ui);
                             } else if &handle == &evt_ui.distance_menu {
                                 SystemTray::hello2(&evt_ui);
                             } else if &handle == &evt_ui.exit_menu {
