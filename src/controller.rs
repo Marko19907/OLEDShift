@@ -4,6 +4,28 @@ use std::thread::sleep;
 use std::time::Duration;
 use crate::mover;
 
+/// The delays that can be selected from the tray menu, in milliseconds
+pub enum Delays {
+    ThirtySeconds = 30000,
+    OneMinute = 60000,
+    TwoMinutes = 120000,
+    FiveMinutes = 300000,
+    Custom = 0,
+}
+
+impl Delays {
+    /// Converts a delay in milliseconds to a Delays enum
+    pub(crate) fn from_millis(millis: i32) -> Self {
+        match millis {
+            x if x == Delays::ThirtySeconds as i32 => Delays::ThirtySeconds,
+            x if x == Delays::OneMinute as i32 => Delays::OneMinute,
+            x if x == Delays::TwoMinutes as i32 => Delays::TwoMinutes,
+            x if x == Delays::FiveMinutes as i32 => Delays::FiveMinutes,
+            _ => Delays::Custom,
+        }
+    }
+}
+
 pub(crate) struct Controller {
     interval: i32,
     running: bool,
@@ -36,6 +58,10 @@ impl Controller {
                 sleep(Duration::from_millis(interval as u64));
             }
         }).expect("Thread failed to start");
+    }
+
+    pub fn get_interval(&self) -> i32 {
+        self.interval
     }
 
     pub fn set_interval(&mut self, interval: i32) {

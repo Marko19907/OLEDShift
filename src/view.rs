@@ -1,5 +1,5 @@
 use std::sync::{Arc, Mutex};
-use crate::controller::Controller;
+use crate::controller::{Controller, Delays};
 
 #[derive(Default)]
 pub struct SystemTray {
@@ -28,7 +28,7 @@ impl SystemTray {
         return SystemTray {
             controller,
             ..Default::default()
-        }
+        };
     }
 
     fn show_menu(&self) {
@@ -56,9 +56,40 @@ impl SystemTray {
         self.tray.show("Hello World", Some("Welcome to my application"), Some(flags), Some(&self.icon));
     }
 
+    fn do_delay(&self, delay: Delays) {
+        match delay {
+            Delays::ThirtySeconds => self.controller.lock().unwrap().set_interval(Delays::ThirtySeconds as i32),
+            Delays::OneMinute => self.controller.lock().unwrap().set_interval(Delays::OneMinute as i32),
+            Delays::TwoMinutes => self.controller.lock().unwrap().set_interval(Delays::TwoMinutes as i32),
+            Delays::FiveMinutes => self.controller.lock().unwrap().set_interval(Delays::FiveMinutes as i32),
+            Delays::Custom => self.delay_custom(),
+        }
+        self.update_delay_menu();
+    }
+
+    fn delay_custom(&self) {
+        // TODO: Implement custom delay
+        println!("Custom delay called!");
+    }
+
     /// Updates the toggle menu item to reflect the current state of the controller
     fn update_toggle(&self) {
         self.enabled_toggle.set_checked(self.controller.lock().unwrap().is_running());
+    }
+
+    /// Updates the delay menu item to reflect the current state of the controller
+    fn update_delay_menu(&self) {
+        [&self.delay_30_menu, &self.delay_1_menu, &self.delay_2_menu, &self.delay_5_menu, &self.delay_custom_menu].iter()
+            .for_each(|x| x.set_checked(false));
+
+        let interval = self.controller.lock().unwrap().get_interval();
+        match Delays::from_millis(interval) {
+            Delays::ThirtySeconds => self.delay_30_menu.set_checked(true),
+            Delays::OneMinute => self.delay_1_menu.set_checked(true),
+            Delays::TwoMinutes => self.delay_2_menu.set_checked(true),
+            Delays::FiveMinutes => self.delay_5_menu.set_checked(true),
+            _ => self.delay_custom_menu.set_checked(true),
+        }
     }
 
     fn exit(&self) {
@@ -75,7 +106,7 @@ mod system_tray_ui {
     use std::rc::Rc;
     use std::cell::RefCell;
     use std::ops::Deref;
-    use crate::controller::Controller;
+    use crate::controller::{Controller, Delays};
     use crate::view::SystemTray;
 
     pub struct SystemTrayUi {
@@ -120,6 +151,7 @@ mod system_tray_ui {
 
             nwg::MenuItem::builder()
                 .text("30 seconds")
+                .check(true)
                 .parent(&data.delay_menu)
                 .build(&mut data.delay_30_menu)?;
 
@@ -185,9 +217,26 @@ mod system_tray_ui {
                             }
                             else if &handle == &evt_ui.delay_menu {
                                 SystemTray::show_delay_menu(&evt_ui);
-                            } else if &handle == &evt_ui.distance_menu {
+                            }
+                            else if &handle == &evt_ui.delay_30_menu {
+                                SystemTray::do_delay(&evt_ui, Delays::ThirtySeconds)
+                            }
+                            else if &handle == &evt_ui.delay_1_menu {
+                                SystemTray::do_delay(&evt_ui, Delays::OneMinute)
+                            }
+                            else if &handle == &evt_ui.delay_2_menu {
+                                SystemTray::do_delay(&evt_ui, Delays::TwoMinutes)
+                            }
+                            else if &handle == &evt_ui.delay_5_menu {
+                                SystemTray::do_delay(&evt_ui, Delays::FiveMinutes)
+                            }
+                            else if &handle == &evt_ui.delay_custom_menu {
+                                SystemTray::do_delay(&evt_ui, Delays::Custom);
+                            }
+                            else if &handle == &evt_ui.distance_menu {
                                 SystemTray::hello2(&evt_ui);
-                            } else if &handle == &evt_ui.exit_menu {
+                            }
+                            else if &handle == &evt_ui.exit_menu {
                                 SystemTray::exit(&evt_ui);
                             },
                         _ => {}
