@@ -72,6 +72,11 @@ unsafe extern "system" fn enum_windows_proc(hwnd: HWND, _: LPARAM) -> BOOL {
             let window_width = wp.rcNormalPosition.right - wp.rcNormalPosition.left;
             let window_height = wp.rcNormalPosition.bottom - wp.rcNormalPosition.top;
 
+            // Check if the window is smaller than the screen, might not be true if the window is a game
+            if !(window_width <= screen_width && window_height <= screen_height) {
+                return TRUE;
+            }
+
             let max_move_x = i32::min(MAX_MOVE_X, screen_width - window_width);
             let max_move_y = i32::min(MAX_MOVE_Y, screen_height - window_height);
 
