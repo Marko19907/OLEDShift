@@ -1,5 +1,7 @@
 use std::sync::{Arc, Mutex};
+use nwg::NativeUi;
 use crate::controller::{Controller, Delays};
+use crate::spin_dialog::SpinDialog;
 
 #[derive(Default)]
 pub struct SystemTray {
@@ -70,6 +72,8 @@ impl SystemTray {
     fn delay_custom(&self) {
         // TODO: Implement custom delay
         println!("Custom delay called!");
+        let ui = SpinDialog::build_ui(Default::default()).expect("Failed to build UI");
+        nwg::dispatch_thread_events();
     }
 
     /// Updates the toggle menu item to reflect the current state of the controller
