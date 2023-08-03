@@ -38,9 +38,10 @@ mod number_select_app_ui {
             // Controls
             nwg::Window::builder()
                 .size((320, 70))
-                .position((300, 300))
+                .center(true)
                 .title("Delay Select Dialog")
                 .icon(Some(&data.icon))
+                .flags(nwg::WindowFlags::WINDOW | nwg::WindowFlags::VISIBLE | nwg::WindowFlags::POPUP)
                 .build(&mut data.window)?;
 
             let mut grid = nwg::GridLayout::default();
@@ -55,6 +56,7 @@ mod number_select_app_ui {
                 .build(&mut data.label)?;
 
             nwg::NumberSelect::builder()
+                .size((152, 27))
                 .decimals( 0)
                 .min_int(200)
                 .value_int(30000)
