@@ -1,3 +1,4 @@
+use std::{thread, cell::RefCell};
 use std::sync::{Arc, Mutex};
 use nwg::NativeUi;
 use crate::controller::{Controller, Delays};
@@ -20,6 +21,8 @@ pub struct SystemTray {
     exit_menu: nwg::MenuItem,
     separator: nwg::MenuSeparator,
     controller: Arc<Mutex<Controller>>,
+    delay_dialog_data: RefCell<Option<thread::JoinHandle<String>>>,
+    delay_dialog_notice: nwg::Notice,
 }
 
 impl SystemTray {
@@ -72,8 +75,8 @@ impl SystemTray {
     fn delay_custom(&self) {
         // TODO: Implement custom delay
         println!("Custom delay called!");
-        let ui = SpinDialog::build_ui(Default::default()).expect("Failed to build UI");
-        nwg::dispatch_thread_events();
+
+        *self.delay_dialog_data.borrow_mut() = Some(SpinDialog::popup(self.delay_dialog_notice.sender()));
     }
 
     /// Updates the toggle menu item to reflect the current state of the controller
@@ -93,6 +96,17 @@ impl SystemTray {
             Delays::TwoMinutes => self.delay_2_menu.set_checked(true),
             Delays::FiveMinutes => self.delay_5_menu.set_checked(true),
             _ => self.delay_custom_menu.set_checked(true),
+        }
+    }
+
+    fn read_delay_dialog_output(&self) {
+        let data = self.delay_dialog_data.borrow_mut().take();
+        match data {
+            Some(handle) => {
+                let dialog_result = handle.join().unwrap();
+                println!("Dialog result: {}", dialog_result);
+            },
+            None => {}
         }
     }
 
@@ -197,6 +211,11 @@ mod system_tray_ui {
                 .parent(&data.tray_menu)
                 .build(&mut data.exit_menu)?;
 
+            // Dialog events
+            nwg::Notice::builder()
+                .parent(&data.window)
+                .build(&mut data.delay_dialog_notice)?;
+
             // Wrap-up
             let ui = SystemTrayUi {
                 inner: Rc::new(data),
@@ -211,6 +230,10 @@ mod system_tray_ui {
             let handle_events = move |evt, _evt_data, handle| {
                 if let Some(evt_ui) = evt_ui.upgrade() {
                     match evt {
+                        E::OnNotice =>
+                            if &handle == &evt_ui.delay_dialog_notice {
+                                SystemTray::read_delay_dialog_output(&evt_ui);
+                            }
                         E::OnContextMenu =>
                             if &handle == &evt_ui.tray {
                                 SystemTray::show_menu(&evt_ui);
