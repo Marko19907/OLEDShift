@@ -1,8 +1,7 @@
 use std::{thread, cell::RefCell};
 use std::sync::{Arc, Mutex};
-use nwg::NativeUi;
 use crate::controller::{Controller, Delays};
-use crate::spin_dialog::SpinDialog;
+use crate::spin_dialog::{SpinDialogData, SpinDialog};
 
 #[derive(Default)]
 pub struct SystemTray {
@@ -21,7 +20,7 @@ pub struct SystemTray {
     exit_menu: nwg::MenuItem,
     separator: nwg::MenuSeparator,
     controller: Arc<Mutex<Controller>>,
-    delay_dialog_data: RefCell<Option<thread::JoinHandle<String>>>,
+    delay_dialog_data: RefCell<Option<thread::JoinHandle<SpinDialogData>>>,
     delay_dialog_notice: nwg::Notice,
 }
 
@@ -99,12 +98,20 @@ impl SystemTray {
         }
     }
 
+    /// Callback for the dialog notice
     fn read_delay_dialog_output(&self) {
         let data = self.delay_dialog_data.borrow_mut().take();
         match data {
             Some(handle) => {
                 let dialog_result = handle.join().unwrap();
-                println!("Dialog result: {}", dialog_result);
+
+                match dialog_result {
+                    SpinDialogData::Value(delay) => {
+                        self.controller.lock().unwrap().set_interval(delay);
+                        self.update_delay_menu();
+                    },
+                    SpinDialogData::Cancel => {}
+                }
             },
             None => {}
         }
@@ -199,6 +206,7 @@ mod system_tray_ui {
 
             nwg::MenuItem::builder()
                 .text("Set max distance")
+                .disabled(true)
                 .parent(&data.tray_menu)
                 .build(&mut data.distance_menu)?;
 

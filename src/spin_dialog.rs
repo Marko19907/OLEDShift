@@ -1,13 +1,18 @@
 use std::{thread, cell::RefCell};
 use nwg::{ControlHandle, NativeUi};
 
+pub enum SpinDialogData {
+    Cancel,
+    Value(i32),
+}
+
 #[derive(Default)]
 pub struct SpinDialog {
     window: nwg::Window,
     icon: nwg::Icon,
     label: nwg::Label,
     number_select: nwg::NumberSelect,
-    data: RefCell<Option<String>>,
+    data: RefCell<Option<SpinDialogData>>,
     ok_button: nwg::Button,
     cancel_button: nwg::Button,
 }
@@ -16,7 +21,7 @@ impl SpinDialog {
 
     /// Create the dialog UI on a new thread. The dialog result will be returned by the thread handle.
     /// To alert the main GUI that the dialog completed, this function takes a notice sender object.
-    pub(crate) fn popup(sender: nwg::NoticeSender) -> thread::JoinHandle<String> {
+    pub(crate) fn popup(sender: nwg::NoticeSender) -> thread::JoinHandle<SpinDialogData> {
         return thread::spawn(move || {
             // Create the UI just like in the main function
             let app = SpinDialog::build_ui(Default::default()).expect("Failed to build UI");
@@ -26,7 +31,7 @@ impl SpinDialog {
             sender.notice();
 
             // Return the dialog data
-            app.data.take().unwrap_or("Cancelled!".to_owned())
+            app.data.take().unwrap_or(SpinDialogData::Cancel)
         })
     }
 
@@ -34,10 +39,15 @@ impl SpinDialog {
         let mut data = self.data.borrow_mut();
         if btn == &self.ok_button {
             let value = self.number_select.data();
-            *data = Some(value.formatted_value());
-        }
-        else if btn == &self.cancel_button {
-            *data = Some("Cancelled!".to_owned());
+            if let Ok(parsed_value) = value.formatted_value().parse::<i32>() {
+                *data = Some(SpinDialogData::Value(parsed_value.abs()));
+            } else {
+                // TODO: Handle the error, if any
+                println!("Failed to parse value!");
+                *data = Some(SpinDialogData::Cancel);
+            }
+        } else if btn == &self.cancel_button {
+            *data = Some(SpinDialogData::Cancel);
         }
 
         self.window.close();
