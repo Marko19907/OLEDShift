@@ -71,11 +71,12 @@ impl SystemTray {
         self.update_delay_menu();
     }
 
+    /// Opens a dialog to set a custom delay
     fn delay_custom(&self) {
-        // TODO: Implement custom delay
-        println!("Custom delay called!");
-
-        *self.delay_dialog_data.borrow_mut() = Some(SpinDialog::popup(self.delay_dialog_notice.sender()));
+        *self.delay_dialog_data.borrow_mut() = Some(SpinDialog::popup(
+            self.delay_dialog_notice.sender(),
+            self.controller.lock().unwrap().get_interval()
+        ));
     }
 
     /// Updates the toggle menu item to reflect the current state of the controller

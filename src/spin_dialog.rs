@@ -1,5 +1,5 @@
 use std::{thread, cell::RefCell};
-use nwg::{ControlHandle, NativeUi};
+use nwg::{ControlHandle, NativeUi, NumberSelectData};
 
 pub enum SpinDialogData {
     Cancel,
@@ -21,17 +21,26 @@ impl SpinDialog {
 
     /// Create the dialog UI on a new thread. The dialog result will be returned by the thread handle.
     /// To alert the main GUI that the dialog completed, this function takes a notice sender object.
-    pub(crate) fn popup(sender: nwg::NoticeSender) -> thread::JoinHandle<SpinDialogData> {
+    pub(crate) fn popup(sender: nwg::NoticeSender, current_value: i32) -> thread::JoinHandle<SpinDialogData> {
         return thread::spawn(move || {
             // Create the UI just like in the main function
             let app = SpinDialog::build_ui(Default::default()).expect("Failed to build UI");
+
+            let number_select_data = NumberSelectData::Int {
+                value: current_value as i64,
+                step: 1,
+                max: i64::MAX,
+                min: i64::MIN,
+            };
+            app.number_select.set_data(number_select_data);
+
             nwg::dispatch_thread_events();
 
             // Notice the main thread that the dialog completed
             sender.notice();
 
             // Return the dialog data
-            app.data.take().unwrap_or(SpinDialogData::Cancel)
+            return app.data.take().unwrap_or(SpinDialogData::Cancel)
         })
     }
 

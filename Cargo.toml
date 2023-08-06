@@ -11,6 +11,6 @@ resources = [
 ]
 
 [dependencies]
-native-windows-gui = { version = "1.0.13", features = ["notice", "high-dpi"]}
+native-windows-gui = { version = "1.0.13", features = ["notice", "high-dpi", "number-select"]}
 rand = "0.8"
 winapi = { version = "0.3", features = ["winuser", "shellapi"] }
