@@ -60,6 +60,11 @@ impl SystemTray {
         self.tray.show("Hello World", Some("Welcome to my application"), Some(flags), Some(&self.icon));
     }
 
+    fn show_start_message(&self) {
+        let flags = nwg::TrayNotificationFlags::USER_ICON | nwg::TrayNotificationFlags::LARGE_ICON;
+        self.tray.show("OLEDShift", Some("OLEDShift is running in the system tray"), Some(flags), Some(&self.icon));
+    }
+
     fn do_delay(&self, delay: Delays) {
         match delay {
             Delays::ThirtySeconds => self.controller.lock().unwrap().set_interval(Delays::ThirtySeconds as i32),
@@ -205,6 +210,7 @@ mod system_tray_ui {
                 .parent(&data.delay_menu)
                 .build(&mut data.delay_custom_menu)?;
 
+            // TODO: Implement this, the MenuItem is disabled for now
             nwg::MenuItem::builder()
                 .text("Set max distance")
                 .disabled(true)
@@ -233,6 +239,8 @@ mod system_tray_ui {
 
             // Start the controller
             Controller::run(ui.inner.controller.clone());
+
+            SystemTray::show_start_message(&ui.inner);
 
             // Events
             let evt_ui = Rc::downgrade(&ui.inner);
