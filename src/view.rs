@@ -49,6 +49,7 @@ impl SystemTray {
         println!("Toggling enabled called");
         self.controller.lock().unwrap().toggle_running();
         self.update_toggle();
+        self.update_tooltip();
     }
 
     fn hello1(&self) {
@@ -74,6 +75,7 @@ impl SystemTray {
             Delays::Custom => self.delay_custom(),
         }
         self.update_delay_menu();
+        self.update_tooltip();
     }
 
     /// Opens a dialog to set a custom delay
@@ -104,6 +106,24 @@ impl SystemTray {
         }
     }
 
+    /// Updates the tooltip to reflect the current state of the controller
+    fn update_tooltip(&self) {
+        let interval = self.controller.lock().unwrap().get_interval();
+
+        let delay = match Delays::from_millis(interval) {
+            Delays::ThirtySeconds => "30 seconds".to_string(),
+            Delays::OneMinute => "1 minute".to_string(),
+            Delays::TwoMinutes => "2 minutes".to_string(),
+            Delays::FiveMinutes => "5 minutes".to_string(),
+            _ => format!("{} second{} (Custom)", interval / 1000, if interval == 1000 { "" } else { "s" }),
+        };
+
+        let pause = if self.controller.lock().unwrap().is_running() { "running" } else { "paused" };
+
+        let tooltip = format!("OLEDShift\nStatus: {}\nDelay: {}", pause, delay);
+        self.tray.set_tip(&tooltip);
+    }
+
     /// Callback for the dialog notice
     fn read_delay_dialog_output(&self) {
         let data = self.delay_dialog_data.borrow_mut().take();
@@ -115,6 +135,7 @@ impl SystemTray {
                     SpinDialogData::Value(delay) => {
                         self.controller.lock().unwrap().set_interval(delay);
                         self.update_delay_menu();
+                        self.update_tooltip();
                     },
                     SpinDialogData::Cancel => {}
                 }
@@ -161,7 +182,6 @@ mod system_tray_ui {
             nwg::TrayNotification::builder()
                 .parent(&data.window)
                 .icon(Some(&data.icon))
-                .tip(Some("Hello"))
                 .build(&mut data.tray)?;
 
             nwg::Menu::builder()
@@ -243,6 +263,7 @@ mod system_tray_ui {
             // Update the UI to reflect the controller state at startup
             ui.inner.update_delay_menu();
             ui.inner.update_toggle();
+            ui.inner.update_tooltip();
 
             SystemTray::show_start_message(&ui.inner);
 
