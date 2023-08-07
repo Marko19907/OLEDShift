@@ -1,5 +1,5 @@
-use std::{thread, cell::RefCell};
-use nwg::{ControlHandle, NativeUi, NumberSelectData};
+use std::{thread, cell::RefCell, i32};
+use nwg::{ControlHandle, NativeUi, NumberSelectData, stretch::{geometry::Size, style::{Dimension as D, FlexDirection, AlignSelf}}};
 
 pub enum SpinDialogData {
     Cancel,
@@ -9,6 +9,9 @@ pub enum SpinDialogData {
 #[derive(Default)]
 pub struct SpinDialog {
     window: nwg::Window,
+    window_box: nwg::FlexboxLayout,
+    content_box: nwg::FlexboxLayout,
+    button_box: nwg::FlexboxLayout,
     icon: nwg::Icon,
     label: nwg::Label,
     number_select: nwg::NumberSelect,
@@ -73,6 +76,9 @@ mod number_select_app_ui {
     use std::rc::Rc;
     use std::cell::RefCell;
     use std::ops::Deref;
+    use nwg::stretch::geometry::Rect;
+    use nwg::stretch::style::{AlignItems, JustifyContent};
+    use nwg::stretch::style::Dimension::Auto;
 
     pub struct SpinDialogUI {
         inner: Rc<SpinDialog>,
@@ -89,20 +95,16 @@ mod number_select_app_ui {
             // Controls
             nwg::Window::builder()
                 .size((320, 70))
+                .topmost(true)
                 .center(true)
                 .title("Delay Select Dialog")
                 .icon(Some(&data.icon))
-                .flags(nwg::WindowFlags::WINDOW | nwg::WindowFlags::VISIBLE | nwg::WindowFlags::POPUP)
+                // .flags(nwg::WindowFlags::WINDOW | nwg::WindowFlags::VISIBLE | nwg::WindowFlags::POPUP)
                 .build(&mut data.window)?;
-
-            let mut grid = nwg::GridLayout::default();
-            nwg::GridLayout::builder()
-                .parent(&data.window)
-                .spacing(1)
-                .build(&mut grid)?;
 
             nwg::Label::builder()
                 .text("Value, in milliseconds:")
+                // .background_color(Option::from([56, 56, 56]))
                 .parent(&data.window)
                 .build(&mut data.label)?;
 
@@ -124,10 +126,49 @@ mod number_select_app_ui {
                 .parent(&data.window)
                 .build(&mut data.cancel_button)?;
 
-            grid.add_child(0, 0, &data.label);
-            grid.add_child(1, 0, &data.number_select);
-            grid.add_child(0, 1, &data.ok_button);
-            grid.add_child(1, 1, &data.cancel_button);
+            // Layouts
+            const PC_50: D = D::Percent(0.5);
+            const PT_50: D = D::Points(50.0);
+
+            const PT_30: D = D::Points(30.0);
+
+            const PT_10: D = D::Points(10.0);
+            const PT_5: D = D::Points(5.0);
+            const PADDING: Rect<D> = Rect{ start: PT_10, end: PT_10, top: PT_10, bottom: PT_10 };
+            const MARGIN: Rect<D> = Rect{ start: PT_5, end: PT_5, top: PT_5, bottom: PT_5 };
+
+            nwg::FlexboxLayout::builder()
+                .parent(&data.window)
+                .flex_direction(FlexDirection::Row)
+                .child(&data.label)
+                    .child_size(Size { width: PC_50, height: PT_50 })
+                .child(&data.number_select)
+                    .child_flex_grow(1.0)
+                    .child_min_size(Size { width: PT_50, height: PT_30 })
+                // .child_align_self(AlignSelf::FlexEnd)
+                .justify_content(JustifyContent::Center)
+                .build_partial(&mut data.content_box)?;
+
+            nwg::FlexboxLayout::builder()
+                .parent(&data.window)
+                .flex_direction(FlexDirection::Row)
+                .child(&data.ok_button)
+                    .child_size(Size { width: Auto, height: PT_30 })
+                    .child_flex_grow(1.0)
+                .child(&data.cancel_button)
+                    .child_size(Size { width: Auto, height: PT_30 })
+                    .child_flex_grow(1.0)
+                .build_partial(&mut data.button_box)?;
+
+            nwg::FlexboxLayout::builder()
+                .parent(&data.window)
+                .flex_direction(FlexDirection::Column)
+                .padding(PADDING)
+                .child_layout(&data.content_box)
+                    // .child_flex_grow(1.0)
+                .child_layout(&data.button_box)
+                // .child_flex_grow(0.0)
+                .build(&mut data.window_box)?;
 
             // Wrap-up
             let ui = SpinDialogUI {
