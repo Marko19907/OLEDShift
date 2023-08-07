@@ -240,6 +240,10 @@ mod system_tray_ui {
             // Start the controller
             Controller::run(ui.inner.controller.clone());
 
+            // Update the UI to reflect the controller state at startup
+            ui.inner.update_delay_menu();
+            ui.inner.update_toggle();
+
             SystemTray::show_start_message(&ui.inner);
 
             // Events
