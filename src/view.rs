@@ -172,7 +172,7 @@ mod system_tray_ui {
 
             // Resources
             nwg::Icon::builder()
-                .source_bin(Some(include_bytes!("cog.ico")))
+                .source_bin(Some(include_bytes!("icon.ico")))
                 .build(&mut data.icon)?;
 
             // Controls

@@ -83,7 +83,7 @@ mod number_select_app_ui {
         fn build_ui(mut data: SpinDialog) -> Result<SpinDialogUI, nwg::NwgError> {
             // Resources
             nwg::Icon::builder()
-                .source_bin(Some(include_bytes!("cog.ico")))
+                .source_bin(Some(include_bytes!("icon.ico")))
                 .build(&mut data.icon)?;
 
             // Controls
