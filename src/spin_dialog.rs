@@ -28,9 +28,9 @@ impl SpinDialog {
 
             let number_select_data = NumberSelectData::Int {
                 value: current_value as i64,
-                step: 1,
-                max: i64::MAX,
-                min: i64::MIN,
+                step: 1000,   // 1 second
+                max: 1800000, // 30 minutes
+                min: 5000,    // 5 seconds
             };
             app.number_select.set_data(number_select_data);
 
