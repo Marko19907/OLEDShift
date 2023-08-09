@@ -72,7 +72,10 @@ impl SystemTray {
             Delays::OneMinute => self.controller.lock().unwrap().set_interval(Delays::OneMinute as i32),
             Delays::TwoMinutes => self.controller.lock().unwrap().set_interval(Delays::TwoMinutes as i32),
             Delays::FiveMinutes => self.controller.lock().unwrap().set_interval(Delays::FiveMinutes as i32),
-            Delays::Custom => self.delay_custom(),
+            Delays::Custom => {
+                self.delay_custom();
+                return; // Don't update the menu or tooltip, will be done when the dialog closes in the callback
+            },
         }
         self.update_delay_menu();
         self.update_tooltip();
@@ -110,18 +113,36 @@ impl SystemTray {
     fn update_tooltip(&self) {
         let interval = self.controller.lock().unwrap().get_interval();
 
-        let delay = match Delays::from_millis(interval) {
-            Delays::ThirtySeconds => "30 seconds".to_string(),
-            Delays::OneMinute => "1 minute".to_string(),
-            Delays::TwoMinutes => "2 minutes".to_string(),
-            Delays::FiveMinutes => "5 minutes".to_string(),
-            _ => format!("{} second{} (Custom)", interval / 1000, if interval == 1000 { "" } else { "s" }),
-        };
+        let delay = self.format_interval(interval);
 
         let pause = if self.controller.lock().unwrap().is_running() { "running" } else { "paused" };
 
         let tooltip = format!("OLEDShift\nStatus: {}\nDelay: {}", pause, delay);
         self.tray.set_tip(&tooltip);
+    }
+
+    /// Formats an interval in milliseconds into a human readable string
+    fn format_interval(&self, interval: i32) -> String {
+        match Delays::from_millis(interval) {
+            Delays::ThirtySeconds => return "30 seconds".to_string(),
+            Delays::OneMinute => return "1 minute".to_string(),
+            Delays::TwoMinutes => return "2 minutes".to_string(),
+            Delays::FiveMinutes => return "5 minutes".to_string(),
+            _ => {}
+        }
+
+        let seconds = interval / 1000;
+        if seconds < 60 {
+            return format!("{} second{} (Custom)", seconds, if seconds == 1 { "" } else { "s" });
+        }
+
+        let minutes = seconds / 60;
+        let seconds = seconds % 60;
+        if seconds == 0 {
+            return format!("{} minutes (Custom)", minutes);
+        }
+
+        return format!("{} minute{} and {} second{} (Custom)", minutes, if minutes == 1 { "" } else { "s" }, seconds, if seconds == 1 { "" } else { "s" });
     }
 
     /// Callback for the dialog notice
