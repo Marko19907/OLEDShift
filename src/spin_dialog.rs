@@ -27,10 +27,10 @@ impl SpinDialog {
             let app = SpinDialog::build_ui(Default::default()).expect("Failed to build UI");
 
             let number_select_data = NumberSelectData::Int {
-                value: current_value as i64,
-                step: 1000,   // 1 second
-                max: 1800000, // 30 minutes
-                min: 5000,    // 5 seconds
+                value: (current_value / 1000) as i64,
+                step: 1,    // 1 second
+                max: 1800,  // 30 minutes
+                min: 5,     // 5 seconds
             };
             app.number_select.set_data(number_select_data);
 
@@ -49,7 +49,7 @@ impl SpinDialog {
         if btn == &self.ok_button {
             let value = self.number_select.data();
             if let Ok(parsed_value) = value.formatted_value().parse::<i32>() {
-                *data = Some(SpinDialogData::Value(parsed_value.abs()));
+                *data = Some(SpinDialogData::Value(parsed_value.abs() * 1000));
             } else {
                 // TODO: Handle the error, if any
                 println!("Failed to parse value!");
@@ -102,7 +102,7 @@ mod number_select_app_ui {
                 .build(&mut grid)?;
 
             nwg::Label::builder()
-                .text("Value, in milliseconds:")
+                .text("Value, in seconds:")
                 .parent(&data.window)
                 .build(&mut data.label)?;
 
