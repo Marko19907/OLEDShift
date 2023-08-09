@@ -1,0 +1,16 @@
+[package]
+name = "hello-rust"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[package.metadata.winres]
+resources = [
+    "src/cog.ico"
+]
+
+[dependencies]
+native-windows-gui = { version = "1.0.13", features = ["notice", "high-dpi", "number-select"]}
+rand = "0.8"
+winapi = { version = "0.3", features = ["winuser", "shellapi"] }
