@@ -73,6 +73,7 @@ mod number_select_app_ui {
     use std::rc::Rc;
     use std::cell::RefCell;
     use std::ops::Deref;
+    use crate::view::ICON;
 
     pub struct SpinDialogUI {
         inner: Rc<SpinDialog>,
@@ -83,7 +84,7 @@ mod number_select_app_ui {
         fn build_ui(mut data: SpinDialog) -> Result<SpinDialogUI, nwg::NwgError> {
             // Resources
             nwg::Icon::builder()
-                .source_bin(Some(include_bytes!("icon.ico")))
+                .source_bin(Option::from(ICON))
                 .build(&mut data.icon)?;
 
             // Controls

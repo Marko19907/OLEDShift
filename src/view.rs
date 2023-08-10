@@ -3,6 +3,8 @@ use std::sync::{Arc, Mutex};
 use crate::controller::{Controller, Delays};
 use crate::spin_dialog::{SpinDialogData, SpinDialog};
 
+pub static ICON: &[u8] = include_bytes!("../icon.ico");
+
 #[derive(Default)]
 pub struct SystemTray {
     window: nwg::MessageWindow,
@@ -180,7 +182,7 @@ mod system_tray_ui {
     use std::cell::RefCell;
     use std::ops::Deref;
     use crate::controller::{Controller, Delays};
-    use crate::view::SystemTray;
+    use crate::view::{ICON, SystemTray};
 
     pub struct SystemTrayUi {
         inner: Rc<SystemTray>,
@@ -193,7 +195,7 @@ mod system_tray_ui {
 
             // Resources
             nwg::Icon::builder()
-                .source_bin(Some(include_bytes!("icon.ico")))
+                .source_bin(Option::from(ICON))
                 .build(&mut data.icon)?;
 
             // Controls
