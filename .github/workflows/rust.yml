@@ -7,17 +7,25 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    strategy:
+      matrix:
+        target: [x86_64-pc-windows-msvc, aarch64-pc-windows-msvc]
+
     steps:
 
       - name: Checkout
         uses: actions/checkout@v3
 
+      - name: Setup ARM toolchain
+        if: matrix.target == 'aarch64-pc-windows-msvc'
+        run: rustup target add aarch64-pc-windows-msvc
+
       - name: Build
-        run: cargo build --release --target x86_64-pc-windows-msvc
+        run: cargo build --release --target ${{ matrix.target }}
 
       - name: Upload binaries
         uses: actions/upload-artifact@v3
         with:
-          name: windows-binaries
+          name: windows-${{ matrix.target == 'x86_64-pc-windows-msvc' && 'x64' || 'arm64' }}-binaries
           retention-days: 7
           path: target/**/release/*.exe
