@@ -20,4 +20,4 @@ jobs:
         with:
           name: windows-binaries
           retention-days: 7
-          path: target/**/*.exe
+          path: target/**/release/*.exe
