@@ -52,13 +52,15 @@ impl Controller {
 
             loop {
                 let controller = controller.lock().unwrap();
-                if controller.running {
-                    println!("Moved windows from a thread!");
+                let running = controller.running;
+                let interval = controller.interval as u64;
+                drop(controller);
+
+                if running {
                     mover::run();
                 }
-                let interval = controller.interval;
-                drop(controller);
-                sleep(Duration::from_millis(interval as u64));
+
+                sleep(Duration::from_millis(interval));
             }
         }).expect("Thread failed to start");
     }
