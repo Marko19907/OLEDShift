@@ -34,7 +34,7 @@ pub(crate) struct Controller {
 impl Default for Controller {
     fn default() -> Self {
         Self {
-            interval: 5000,
+            interval: Delays::ThirtySeconds as i32,
             running: true,
         }
     }
@@ -47,6 +47,9 @@ impl Controller {
 
     pub fn run(controller: Arc<Mutex<Self>>) {
         thread::Builder::new().name("mover_thread".to_string()).spawn(move || {
+            let interval = controller.lock().unwrap().interval as u64;
+            sleep(Duration::from_millis(interval)); // Wait for the first interval, don't move windows immediately
+
             loop {
                 let controller = controller.lock().unwrap();
                 if controller.running {
