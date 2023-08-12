@@ -1,3 +1,4 @@
+use std::ffi::c_void;
 use std::ptr;
 use std::mem;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -55,53 +56,67 @@ fn get_taskbar_height() -> i32 {
     }
 }
 
+/// Returns true if the window is visible.
+unsafe fn is_window_visible(hwnd: HWND) -> bool {
+    return IsWindowVisible(hwnd) != 0;
+}
+
+/// Returns true if the window is maximized.
+fn is_window_maximized(wp: &WINDOWPLACEMENT) -> bool {
+    return wp.showCmd as i32 == SW_SHOWMAXIMIZED;
+}
+
 unsafe extern "system" fn enum_windows_proc(hwnd: HWND, _: LPARAM) -> BOOL {
-    if IsWindowVisible(hwnd) != 0 {
-        let mut wp: WINDOWPLACEMENT = mem::zeroed();
-        wp.length = mem::size_of::<WINDOWPLACEMENT>() as UINT;
-        GetWindowPlacement(hwnd, &mut wp);
-
-        if wp.showCmd as i32 != SW_SHOWMAXIMIZED {
-            let h_monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-            let mut monitor_info: MONITORINFO = mem::zeroed();
-            monitor_info.cbSize = mem::size_of::<MONITORINFO>() as UINT;
-            GetMonitorInfoW(h_monitor, &mut monitor_info);
-
-            let screen_width = monitor_info.rcMonitor.right - monitor_info.rcMonitor.left;
-            let screen_height = monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top;
-            let window_width = wp.rcNormalPosition.right - wp.rcNormalPosition.left;
-            let window_height = wp.rcNormalPosition.bottom - wp.rcNormalPosition.top;
-
-            // Check if the window is smaller than the screen, might not be true if the window is a game
-            if !(window_width <= screen_width && window_height <= screen_height) {
-                return TRUE;
-            }
-
-            let max_move_x = i32::min(MAX_MOVE_X, screen_width - window_width);
-            let max_move_y = i32::min(MAX_MOVE_Y, screen_height - window_height);
-
-            let mut rng = rand::thread_rng();
-            let random_x = wp.rcNormalPosition.left + rng.gen_range(0..(2 * max_move_x + 1)) - max_move_x;
-            let random_y = wp.rcNormalPosition.top + rng.gen_range(0..(2 * max_move_y + 1)) - max_move_y;
-
-            let random_x = i32::max(monitor_info.rcMonitor.left, i32::min(random_x, monitor_info.rcMonitor.right - window_width));
-            let mut random_y = i32::max(monitor_info.rcMonitor.top, i32::min(random_y, monitor_info.rcMonitor.bottom - window_height));
-
-            let taskbar_height = get_taskbar_height();
-
-            if is_taskbar_auto_hidden() {
-                random_y = i32::max(random_y, monitor_info.rcMonitor.top + taskbar_height);
-            } else {
-                random_y = i32::min(random_y, monitor_info.rcMonitor.bottom - window_height - taskbar_height);
-            }
-
-            SetWindowPos(hwnd, HWND_TOP, random_x, random_y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
-
-            if AnimateWindow(hwnd, 4000, AW_CENTER) == 0 {
-                // Failed to animate window movement
-            }
-        }
+    if !is_window_visible(hwnd) {
+        return TRUE;
     }
+    let mut wp: WINDOWPLACEMENT = mem::zeroed();
+    wp.length = mem::size_of::<WINDOWPLACEMENT>() as UINT;
+    GetWindowPlacement(hwnd, &mut wp);
+
+    if is_window_maximized(&wp) {
+        return TRUE;
+    }
+
+    let h_monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+    let mut monitor_info: MONITORINFO = mem::zeroed();
+    monitor_info.cbSize = mem::size_of::<MONITORINFO>() as UINT;
+    GetMonitorInfoW(h_monitor, &mut monitor_info);
+
+    let screen_width = monitor_info.rcMonitor.right - monitor_info.rcMonitor.left;
+    let screen_height = monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top;
+    let window_width = wp.rcNormalPosition.right - wp.rcNormalPosition.left;
+    let window_height = wp.rcNormalPosition.bottom - wp.rcNormalPosition.top;
+
+    // Check if the window is smaller than the screen, might not be true if the window is a game
+    if !(window_width <= screen_width && window_height <= screen_height) {
+        return TRUE;
+    }
+
+    let max_move_x = i32::min(MAX_MOVE_X, screen_width - window_width);
+    let max_move_y = i32::min(MAX_MOVE_Y, screen_height - window_height);
+
+    let mut rng = rand::thread_rng();
+    let random_x = wp.rcNormalPosition.left + rng.gen_range(0..(2 * max_move_x + 1)) - max_move_x;
+    let random_y = wp.rcNormalPosition.top + rng.gen_range(0..(2 * max_move_y + 1)) - max_move_y;
+
+    let random_x = i32::max(monitor_info.rcMonitor.left, i32::min(random_x, monitor_info.rcMonitor.right - window_width));
+    let mut random_y = i32::max(monitor_info.rcMonitor.top, i32::min(random_y, monitor_info.rcMonitor.bottom - window_height));
+
+    let taskbar_height = get_taskbar_height();
+
+    if is_taskbar_auto_hidden() {
+        random_y = i32::max(random_y, monitor_info.rcMonitor.top + taskbar_height);
+    } else {
+        random_y = i32::min(random_y, monitor_info.rcMonitor.bottom - window_height - taskbar_height);
+    }
+
+    SetWindowPos(hwnd, HWND_TOP, random_x, random_y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+
+    if AnimateWindow(hwnd, 4000, AW_CENTER) == 0 {
+        // Failed to animate window movement
+    }
+
     return TRUE;
 }
 
@@ -117,6 +132,7 @@ pub fn run() {
     return;
 }
 
+/// Leftover code from the proof of concept command line version, not used in the GUI version.
 pub fn main() {
     unsafe {
         let _seed = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
