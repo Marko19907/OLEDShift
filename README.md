@@ -1,12 +1,12 @@
 # OLEDShift
 
-A small system tray utility that moves around the windows on your screen. 
+A small system tray utility that moves around the windows on your screen.
 It's useful for OLED screens, where you want to move around the windows often to prevent burn-in and extend the lifespan of the display.
 
 One of the main ideas behind this program is to be as minimal as possible and to use as little resources as possible so that it can run in the background with minimal impact on the system.
 It uses less than **2MB** of RAM on my system, launch time is nearly instant.
 
-The [Win32 API](https://docs.microsoft.com/en-us/windows/win32/apiindex/windows-api-list) is used to move the windows 
+The [Win32 API](https://docs.microsoft.com/en-us/windows/win32/apiindex/windows-api-list) is used to move the windows
 and [Native Windows GUI (NWG)](https://github.com/gabdube/native-windows-gui) is used for the GUI as a Rust wrapper around the GUI part of the Win32 API.
 
 ## Usage
@@ -47,15 +47,15 @@ If everything goes well, the executable will be located in the `target/release` 
 
 ## Known issues
 
-* Snapped windows get moved
-* The dialog doesn't have an icon
-* The dialog also doesn't allow keyboard input
-* The ARM64 build was not tested on an actual WOA machine, but it should work
-* The user can't specify the amount of pixels to move the windows by (yet)
+* [Snapped windows get moved](https://github.com/Marko19907/OLEDShift/issues/2)
+* [The dialog doesn't have an icon](https://github.com/Marko19907/OLEDShift/issues/3)
+* [The dialog also doesn't allow keyboard input](https://github.com/Marko19907/OLEDShift/issues/4)
+* [The ARM64 build was not tested on an actual WOA machine, but it should work](https://github.com/Marko19907/OLEDShift/issues/5)
+* [The user can't specify the amount of pixels to move the windows by (yet)](https://github.com/Marko19907/OLEDShift/issues/6)
 
 
 ## Limitations
 
 * Only works on Windows
-* Animations are not supported, windows are moved instantly (unsure if this is even possible)
-* Data is not persisted between sessions, settings revert to defaults on every launch
+* [Animations are not supported, windows are moved instantly (unsure if this is even possible)](https://github.com/Marko19907/OLEDShift/issues/8)
+* [Data is not persisted between sessions, settings revert to defaults on every launch](https://github.com/Marko19907/OLEDShift/issues/9)
