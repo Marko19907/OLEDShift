@@ -1,5 +1,7 @@
 # OLEDShift
 
+[![Rust Cargo build](https://github.com/Marko19907/OLEDShift/actions/workflows/rust.yml/badge.svg)](https://github.com/Marko19907/OLEDShift/actions/workflows/rust.yml)
+
 A small system tray utility that moves around the windows on your screen.
 It's useful for OLED screens, where you want to move around the windows often to prevent burn-in and extend the lifespan of the display.
 
