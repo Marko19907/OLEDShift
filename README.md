@@ -21,7 +21,7 @@ This is the preferred method.
 
 ### GitHub Actions
 
-The program is built automatically on every push to the `main` branch and the executables are uploaded as artifacts.
+The program is built automatically on every push and the executables are uploaded as artifacts, these builds are not guaranteed to be stable, and you might need to be logged in to GitHub to download them. <br>
 One can also fork the repository and run the workflow manually to build the program, no installation necessary.
 
 ### Building from source locally
@@ -50,7 +50,6 @@ If everything goes well, the executable will be located in the `target/release` 
 
 ## Known issues
 
-* [Snapped windows get moved](https://github.com/Marko19907/OLEDShift/issues/2)
 * [The dialog doesn't have an icon](https://github.com/Marko19907/OLEDShift/issues/3)
 * [The dialog also doesn't allow keyboard input](https://github.com/Marko19907/OLEDShift/issues/4)
 * [The ARM64 build was not tested on an actual WOA machine, but it should work](https://github.com/Marko19907/OLEDShift/issues/5)
