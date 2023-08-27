@@ -1,7 +1,11 @@
-use std::ffi::c_void;
-use std::ptr;
-use std::mem;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    mem,
+    ptr,
+    os::raw::c_int,
+    time::{SystemTime, UNIX_EPOCH}
+};
+use std::sync::Once;
+use libloading::Library;
 use rand::Rng;
 use winapi::{
     shared::minwindef::{BOOL, DWORD, LPARAM, TRUE, UINT, LPVOID},
@@ -40,6 +44,10 @@ use winapi::um::winuser::SW_SHOWMAXIMIZED;
 const MAX_MOVE_X: i32 = 50;
 const MAX_MOVE_Y: i32 = 50;
 
+/// A function pointer to the IsWindowArranged function in user32.dll
+static mut IS_WINDOW_ARRANGED: Option<unsafe extern "system" fn(c_int) -> bool> = None;
+static INIT: Once = Once::new();
+
 fn is_taskbar_auto_hidden() -> bool {
     let mut app_bar_data: APPBARDATA = unsafe { std::mem::zeroed() };
     app_bar_data.cbSize = std::mem::size_of::<APPBARDATA>() as u32;
@@ -54,6 +62,23 @@ fn get_taskbar_height() -> i32 {
         let screen_height = GetSystemMetrics(SM_CYSCREEN);
         return screen_height - (work_area_rect.bottom - work_area_rect.top);
     }
+}
+
+fn is_window_snapped(hwnd: HWND) -> bool {
+    unsafe {
+        INIT.call_once(|| {
+            if let Ok(lib) = Library::new("user32.dll") {
+                IS_WINDOW_ARRANGED = lib
+                    .get::<unsafe extern "system" fn(c_int) -> bool>(b"IsWindowArranged")
+                    .ok()
+                    .map(|sym| *sym.into_raw()); // Convert the Symbol into a function pointer
+            }
+        });
+        if let Some(func) = IS_WINDOW_ARRANGED {
+            return func(hwnd as i32);
+        }
+    }
+    return false;
 }
 
 /// Returns true if the window is visible.
@@ -74,7 +99,7 @@ unsafe extern "system" fn enum_windows_proc(hwnd: HWND, _: LPARAM) -> BOOL {
     wp.length = mem::size_of::<WINDOWPLACEMENT>() as UINT;
     GetWindowPlacement(hwnd, &mut wp);
 
-    if is_window_maximized(&wp) {
+    if is_window_maximized(&wp) || is_window_snapped(hwnd) {
         return TRUE;
     }
 
