@@ -1,7 +1,7 @@
 use std::{thread, cell::RefCell};
 use std::sync::{Arc, Mutex};
 use crate::controller::{Controller, Delays};
-use crate::spin_dialog::{SpinDialogData, SpinDialog};
+use crate::delay_dialog::{DelayDialogData, DelayDialog};
 
 pub static ICON: &[u8] = include_bytes!("../icon.ico");
 
@@ -22,7 +22,7 @@ pub struct SystemTray {
     exit_menu: nwg::MenuItem,
     separator: nwg::MenuSeparator,
     controller: Arc<Mutex<Controller>>,
-    delay_dialog_data: RefCell<Option<thread::JoinHandle<SpinDialogData>>>,
+    delay_dialog_data: RefCell<Option<thread::JoinHandle<DelayDialogData>>>,
     delay_dialog_notice: nwg::Notice,
 }
 
@@ -85,7 +85,7 @@ impl SystemTray {
 
     /// Opens a dialog to set a custom delay
     fn delay_custom(&self) {
-        *self.delay_dialog_data.borrow_mut() = Some(SpinDialog::popup(
+        *self.delay_dialog_data.borrow_mut() = Some(DelayDialog::popup(
             self.delay_dialog_notice.sender(),
             self.controller.lock().unwrap().get_interval()
         ));
@@ -155,12 +155,12 @@ impl SystemTray {
                 let dialog_result = handle.join().unwrap();
 
                 match dialog_result {
-                    SpinDialogData::Value(delay) => {
+                    DelayDialogData::Value(delay) => {
                         self.controller.lock().unwrap().set_interval(delay);
                         self.update_delay_menu();
                         self.update_tooltip();
                     },
-                    SpinDialogData::Cancel => {}
+                    DelayDialogData::Cancel => {}
                 }
             },
             None => {}

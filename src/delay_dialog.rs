@@ -1,30 +1,30 @@
 use std::{thread, cell::RefCell};
 use nwg::{ControlHandle, NativeUi, NumberSelectData};
 
-pub enum SpinDialogData {
+pub enum DelayDialogData {
     Cancel,
     Value(i32),
 }
 
 #[derive(Default)]
-pub struct SpinDialog {
+pub struct DelayDialog {
     window: nwg::Window,
     icon: nwg::Icon,
     label: nwg::Label,
     number_select: nwg::NumberSelect,
-    data: RefCell<Option<SpinDialogData>>,
+    data: RefCell<Option<DelayDialogData>>,
     ok_button: nwg::Button,
     cancel_button: nwg::Button,
 }
 
-impl SpinDialog {
+impl DelayDialog {
 
     /// Create the dialog UI on a new thread. The dialog result will be returned by the thread handle.
     /// To alert the main GUI that the dialog completed, this function takes a notice sender object.
-    pub(crate) fn popup(sender: nwg::NoticeSender, current_value: i32) -> thread::JoinHandle<SpinDialogData> {
+    pub(crate) fn popup(sender: nwg::NoticeSender, current_value: i32) -> thread::JoinHandle<DelayDialogData> {
         return thread::spawn(move || {
             // Create the UI just like in the main function
-            let app = SpinDialog::build_ui(Default::default()).expect("Failed to build UI");
+            let app = DelayDialog::build_ui(Default::default()).expect("Failed to build UI");
 
             let number_select_data = NumberSelectData::Int {
                 value: (current_value / 1000) as i64,
@@ -40,7 +40,7 @@ impl SpinDialog {
             sender.notice();
 
             // Return the dialog data
-            return app.data.take().unwrap_or(SpinDialogData::Cancel)
+            return app.data.take().unwrap_or(DelayDialogData::Cancel)
         })
     }
 
@@ -49,14 +49,14 @@ impl SpinDialog {
         if btn == &self.ok_button {
             let value = self.number_select.data();
             if let Ok(parsed_value) = value.formatted_value().parse::<i32>() {
-                *data = Some(SpinDialogData::Value(parsed_value.abs() * 1000));
+                *data = Some(DelayDialogData::Value(parsed_value.abs() * 1000));
             } else {
                 // TODO: Handle the error, if any
                 println!("Failed to parse value!");
-                *data = Some(SpinDialogData::Cancel);
+                *data = Some(DelayDialogData::Cancel);
             }
         } else if btn == &self.cancel_button {
-            *data = Some(SpinDialogData::Cancel);
+            *data = Some(DelayDialogData::Cancel);
         }
 
         self.window.close();
@@ -76,12 +76,12 @@ mod number_select_app_ui {
     use crate::view::ICON;
 
     pub struct SpinDialogUI {
-        inner: Rc<SpinDialog>,
+        inner: Rc<DelayDialog>,
         default_handler: RefCell<Vec<nwg::EventHandler>>,
     }
 
-    impl NativeUi<SpinDialogUI> for SpinDialog {
-        fn build_ui(mut data: SpinDialog) -> Result<SpinDialogUI, nwg::NwgError> {
+    impl NativeUi<SpinDialogUI> for DelayDialog {
+        fn build_ui(mut data: DelayDialog) -> Result<SpinDialogUI, nwg::NwgError> {
             // Resources
             nwg::Icon::builder()
                 .source_bin(Option::from(ICON))
@@ -145,12 +145,12 @@ mod number_select_app_ui {
                     match evt {
                         E::OnButtonClick => {
                             if &handle == &ui.ok_button || &handle == &ui.cancel_button {
-                                SpinDialog::choose(&ui, &handle);
+                                DelayDialog::choose(&ui, &handle);
                             }
                         }
                         E::OnWindowClose => {
                             if &handle == &ui.window {
-                                SpinDialog::exit(&ui);
+                                DelayDialog::exit(&ui);
                             }
                         }
                         _ => {}
@@ -177,9 +177,9 @@ mod number_select_app_ui {
     }
 
     impl Deref for SpinDialogUI {
-        type Target = SpinDialog;
+        type Target = DelayDialog;
 
-        fn deref(&self) -> &SpinDialog {
+        fn deref(&self) -> &DelayDialog {
             &self.inner
         }
     }
