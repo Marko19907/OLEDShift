@@ -14,6 +14,7 @@ mod view;
 mod mover;
 mod controller;
 mod delay_dialog;
+mod distance_dialog;
 
 
 fn main() {

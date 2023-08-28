@@ -2,6 +2,7 @@ use std::{thread, cell::RefCell};
 use std::sync::{Arc, Mutex};
 use crate::controller::{Controller, Delays};
 use crate::delay_dialog::{DelayDialogData, DelayDialog};
+use crate::distance_dialog::{DistanceDialog, DistanceDialogData};
 
 pub static ICON: &[u8] = include_bytes!("../icon.ico");
 
@@ -24,6 +25,8 @@ pub struct SystemTray {
     controller: Arc<Mutex<Controller>>,
     delay_dialog_data: RefCell<Option<thread::JoinHandle<DelayDialogData>>>,
     delay_dialog_notice: nwg::Notice,
+    distance_dialog_data: RefCell<Option<thread::JoinHandle<DistanceDialogData>>>,
+    distance_dialog_notice: nwg::Notice,
 }
 
 impl SystemTray {
@@ -58,9 +61,14 @@ impl SystemTray {
         nwg::modal_info_message(&self.window, "Hello", "Hello World!");
     }
 
-    fn hello2(&self) {
-        let flags = nwg::TrayNotificationFlags::USER_ICON | nwg::TrayNotificationFlags::LARGE_ICON;
-        self.tray.show("Hello World", Some("Welcome to my application"), Some(flags), Some(&self.icon));
+    fn do_custom_distance(&self) {
+        *self.distance_dialog_data.borrow_mut() = Some(DistanceDialog::popup(
+            self.distance_dialog_notice.sender(),
+            120,
+            50,
+            1920,
+            1080
+        ));
     }
 
     fn show_start_message(&self) {
@@ -167,6 +175,24 @@ impl SystemTray {
         }
     }
 
+    /// Callback for the distance dialog notice
+    fn read_distance_dialog_output(&self) {
+        let data = self.distance_dialog_data.borrow_mut().take();
+        match data {
+            Some(handle) => {
+                let dialog_result = handle.join().unwrap();
+
+                match dialog_result {
+                    DistanceDialogData::Value(distance_x, distance_y) => {
+                        println!("Distance: {}, {}", distance_x, distance_y);
+                    },
+                    DistanceDialogData::Cancel => {}
+                }
+            },
+            None => {}
+        }
+    }
+
     fn exit(&self) {
         nwg::stop_thread_dispatch();
     }
@@ -253,10 +279,8 @@ mod system_tray_ui {
                 .parent(&data.delay_menu)
                 .build(&mut data.delay_custom_menu)?;
 
-            // TODO: Implement this, the MenuItem is disabled for now
             nwg::MenuItem::builder()
                 .text("Set max distance")
-                .disabled(true)
                 .parent(&data.tray_menu)
                 .build(&mut data.distance_menu)?;
 
@@ -273,6 +297,10 @@ mod system_tray_ui {
             nwg::Notice::builder()
                 .parent(&data.window)
                 .build(&mut data.delay_dialog_notice)?;
+
+            nwg::Notice::builder()
+                .parent(&data.window)
+                .build(&mut data.distance_dialog_notice)?;
 
             // Wrap-up
             let ui = SystemTrayUi {
@@ -298,6 +326,9 @@ mod system_tray_ui {
                         E::OnNotice =>
                             if &handle == &evt_ui.delay_dialog_notice {
                                 SystemTray::read_delay_dialog_output(&evt_ui);
+                            }
+                            else if &handle == &evt_ui.distance_dialog_notice {
+                                SystemTray::read_distance_dialog_output(&evt_ui);
                             }
                         E::OnContextMenu =>
                             if &handle == &evt_ui.tray {
@@ -326,7 +357,7 @@ mod system_tray_ui {
                                 SystemTray::do_delay(&evt_ui, Delays::Custom);
                             }
                             else if &handle == &evt_ui.distance_menu {
-                                SystemTray::hello2(&evt_ui);
+                                SystemTray::do_custom_distance(&evt_ui);
                             }
                             else if &handle == &evt_ui.exit_menu {
                                 SystemTray::exit(&evt_ui);
