@@ -8,10 +8,12 @@ use std::sync::Once;
 use libloading::Library;
 use rand::Rng;
 use winapi::{
+    um::shellapi::{ABM_GETSTATE, ABS_AUTOHIDE, APPBARDATA, SHAppBarMessage},
     shared::minwindef::{BOOL, DWORD, LPARAM, TRUE, UINT, LPVOID},
     shared::basetsd::UINT_PTR,
-    shared::windef::{RECT, HWND},
+    shared::windef::{RECT, HDC, HMONITOR, HWND},
     um::winuser::{
+        EnumDisplayMonitors,
         EnumWindows,
         DispatchMessageW,
         AnimateWindow,
@@ -23,6 +25,7 @@ use winapi::{
         HWND_TOP,
         IsWindowVisible,
         KillTimer,
+        MONITORINFOEXW,
         MONITOR_DEFAULTTONEAREST,
         MonitorFromWindow,
         MONITORINFO,
@@ -31,15 +34,14 @@ use winapi::{
         SetWindowPos,
         SM_CYSCREEN,
         SPI_GETWORKAREA,
+        SW_SHOWMAXIMIZED,
         SWP_NOSIZE,
         SWP_NOZORDER,
         SystemParametersInfoW,
         TranslateMessage,
         WINDOWPLACEMENT
-    }
+    },
 };
-use winapi::um::shellapi::{ABM_GETSTATE, ABS_AUTOHIDE, APPBARDATA, SHAppBarMessage};
-use winapi::um::winuser::SW_SHOWMAXIMIZED;
 
 const MAX_MOVE_X: i32 = 50;
 const MAX_MOVE_Y: i32 = 50;
@@ -79,6 +81,43 @@ fn is_window_snapped(hwnd: HWND) -> bool {
         }
     }
     return false;
+}
+
+/// Returns the smallest screen size in the form (width, height).
+pub fn get_smallest_screen_size() -> Option<(i32, i32)> {
+    let mut screen_sizes: Vec<(i32, i32)> = Vec::new();
+
+    unsafe {
+        EnumDisplayMonitors(
+            ptr::null_mut(),
+            ptr::null_mut(),
+            Some(enum_display_monitors_callback),
+            &mut screen_sizes as *mut _ as LPARAM,
+        );
+    }
+
+    return screen_sizes.into_iter().min();
+}
+
+unsafe extern "system" fn enum_display_monitors_callback(
+    _hmonitor: HMONITOR,
+    _hdc: HDC,
+    _lprect: *mut RECT,
+    lparam: LPARAM,
+) -> BOOL {
+    let screen_sizes = &mut *(lparam as *mut Vec<(i32, i32)>);
+
+    let mut monitor_info: MONITORINFOEXW = mem::zeroed();
+    monitor_info.cbSize = mem::size_of::<MONITORINFOEXW>() as u32;
+
+    GetMonitorInfoW(_hmonitor, &mut monitor_info as *mut _ as *mut _);
+
+    let width = monitor_info.rcMonitor.right - monitor_info.rcMonitor.left;
+    let height = monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top;
+
+    screen_sizes.push((width, height));
+
+    return TRUE;
 }
 
 /// Returns true if the window is visible.
