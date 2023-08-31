@@ -65,9 +65,7 @@ impl SystemTray {
         *self.distance_dialog_data.borrow_mut() = Some(DistanceDialog::popup(
             self.distance_dialog_notice.sender(),
             120,
-            50,
-            1920,
-            1080
+            50
         ));
     }
 

@@ -1,3 +1,4 @@
+use crate::mover;
 use std::{thread, cell::RefCell};
 use nwg::{ControlHandle, NativeUi, NumberSelectData};
 
@@ -23,15 +24,17 @@ impl DistanceDialog {
 
     /// Create the dialog UI on a new thread. The dialog result will be returned by the thread handle.
     /// To alert the main GUI that the dialog completed, this function takes a notice sender object.
-    pub(crate) fn popup(sender: nwg::NoticeSender, current_value_x: i32, current_value_y: i32, max_x: i32, max_y: i32) -> thread::JoinHandle<DistanceDialogData> {
+    pub(crate) fn popup(sender: nwg::NoticeSender, current_value_x: i32, current_value_y: i32) -> thread::JoinHandle<DistanceDialogData> {
         return thread::spawn(move || {
             // Create the UI just like in the main function
             let app = DistanceDialog::build_ui(Default::default()).expect("Failed to build UI");
 
+            let (smallest_x, smallest_y) = mover::get_smallest_screen_size().unwrap_or((400, 400));
+
             let number_select_data_x = NumberSelectData::Int {
                 value: current_value_x as i64,
                 step: 1,
-                max: 1920 / 2, // TODO: Adjust to something dynamic based on the size of the smallest screen
+                max: smallest_x as i64 / 4,
                 min: 5,
             };
             app.number_select_x.set_data(number_select_data_x);
@@ -39,7 +42,7 @@ impl DistanceDialog {
             let number_select_data_y = NumberSelectData::Int {
                 value: current_value_y as i64,
                 step: 1,
-                max: 1080 / 2, // TODO: Adjust to something dynamic based on the size of the smallest screen
+                max: smallest_y as i64 / 4,
                 min: 5,
             };
             app.number_select_y.set_data(number_select_data_y);
