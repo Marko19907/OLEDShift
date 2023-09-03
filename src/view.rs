@@ -62,10 +62,12 @@ impl SystemTray {
     }
 
     fn do_custom_distance(&self) {
+        let (max_x, max_y) = self.controller.lock().unwrap().get_max_move();
+
         *self.distance_dialog_data.borrow_mut() = Some(DistanceDialog::popup(
             self.distance_dialog_notice.sender(),
-            120,
-            50
+            max_x,
+            max_y
         ));
     }
 
@@ -182,7 +184,7 @@ impl SystemTray {
 
                 match dialog_result {
                     DistanceDialogData::Value(distance_x, distance_y) => {
-                        println!("Distance: {}, {}", distance_x, distance_y);
+                        self.controller.lock().unwrap().set_max_move(distance_x, distance_y);
                     },
                     DistanceDialogData::Cancel => {}
                 }
