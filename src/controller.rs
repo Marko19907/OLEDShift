@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
+use lazy_static::lazy_static;
 use crate::mover;
 
 /// The delays that can be selected from the tray menu, in milliseconds
@@ -24,6 +25,11 @@ impl Delays {
             _ => Delays::Custom,
         }
     }
+}
+
+lazy_static! {
+    pub static ref MAX_MOVE_X: Mutex<i32> = Mutex::new(50);
+    pub static ref MAX_MOVE_Y: Mutex<i32> = Mutex::new(50);
 }
 
 pub(crate) struct Controller {
@@ -79,5 +85,16 @@ impl Controller {
 
     pub fn toggle_running(&mut self) {
         self.running = !self.running;
+    }
+
+    pub fn get_max_move(&self) -> (i32, i32) {
+        let max_x = *MAX_MOVE_X.lock().unwrap();
+        let max_y = *MAX_MOVE_Y.lock().unwrap();
+        return (max_x, max_y);
+    }
+
+    pub fn set_max_move(&mut self, max_move_x: i32, max_move_y: i32) {
+        *MAX_MOVE_X.lock().unwrap() = max_move_x;
+        *MAX_MOVE_Y.lock().unwrap() = max_move_y;
     }
 }
