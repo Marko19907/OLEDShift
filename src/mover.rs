@@ -42,9 +42,10 @@ use winapi::{
         WINDOWPLACEMENT
     },
 };
+use crate::controller::{MAX_MOVE_X, MAX_MOVE_Y};
 
-const MAX_MOVE_X: i32 = 50;
-const MAX_MOVE_Y: i32 = 50;
+const MAX_MOVE_X_DEFAULT: i32 = 50; // These are the defaults used if the UI is not running
+const MAX_MOVE_Y_DEFAULT: i32 = 50;
 
 /// A function pointer to the IsWindowArranged function in user32.dll
 static mut IS_WINDOW_ARRANGED: Option<unsafe extern "system" fn(c_int) -> bool> = None;
@@ -157,8 +158,11 @@ unsafe extern "system" fn enum_windows_proc(hwnd: HWND, _: LPARAM) -> BOOL {
         return TRUE;
     }
 
-    let max_move_x = i32::min(MAX_MOVE_X, screen_width - window_width);
-    let max_move_y = i32::min(MAX_MOVE_Y, screen_height - window_height);
+    let max_x = MAX_MOVE_X.lock().map_or(MAX_MOVE_X_DEFAULT, |guard| *guard);
+    let max_y = MAX_MOVE_Y.lock().map_or(MAX_MOVE_Y_DEFAULT, |guard| *guard);
+
+    let max_move_x = i32::min(max_x, screen_width - window_width);
+    let max_move_y = i32::min(max_y, screen_height - window_height);
 
     let mut rng = rand::thread_rng();
     let random_x = wp.rcNormalPosition.left + rng.gen_range(0..(2 * max_move_x + 1)) - max_move_x;
