@@ -28,8 +28,7 @@ impl Delays {
 }
 
 lazy_static! {
-    pub static ref MAX_MOVE_X: Mutex<i32> = Mutex::new(50);
-    pub static ref MAX_MOVE_Y: Mutex<i32> = Mutex::new(50);
+    pub static ref MAX_MOVE: Mutex<(i32, i32)> = Mutex::new((50, 50));
 }
 
 pub(crate) struct Controller {
@@ -88,13 +87,10 @@ impl Controller {
     }
 
     pub fn get_max_move(&self) -> (i32, i32) {
-        let max_x = *MAX_MOVE_X.lock().unwrap();
-        let max_y = *MAX_MOVE_Y.lock().unwrap();
-        return (max_x, max_y);
+        return *MAX_MOVE.lock().unwrap();
     }
 
     pub fn set_max_move(&mut self, max_move_x: i32, max_move_y: i32) {
-        *MAX_MOVE_X.lock().unwrap() = max_move_x;
-        *MAX_MOVE_Y.lock().unwrap() = max_move_y;
+        *MAX_MOVE.lock().unwrap() = (max_move_x, max_move_y);
     }
 }
