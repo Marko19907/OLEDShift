@@ -47,6 +47,8 @@ If everything goes well, the executable will be located in the `target/release` 
 - Windows 11 SDK
 - MSVC toolchain
 
+Follow the [Rust installation guide](https://rust-lang.github.io/rustup/installation/windows-msvc.html) to install the prerequisites.
+
 
 ## Known issues
 
