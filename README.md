@@ -21,8 +21,12 @@ This is the preferred method.
 
 ### GitHub Actions
 
-The program is built automatically on every push and the executables are uploaded as artifacts, these builds are not guaranteed to be stable, and you might need to be logged in to GitHub to download them. <br>
-One can also fork the repository and run the workflow manually to build the program, no installation necessary.
+The program is built automatically on every push and the executables are uploaded as artifacts, these builds are not guaranteed to be stable or functional, they expire after 90 days, and you might need to be logged in to GitHub to download them.
+
+If you're struggling to find the artifacts here on GitHub, you can download the latest build of the main branch from nightly.link for x86_64 [here](https://nightly.link/Marko19907/OLEDShift/workflows/rust/main/windows-x64-binaries.zip) 
+and for ARM64 [here](https://nightly.link/Marko19907/OLEDShift/workflows/rust/main/windows-arm64-binaries.zip).
+
+One can also fork the repository and run the workflow manually to build the program. None of these options require you to have anything installed on your machine.
 
 ### Building from source locally
 
@@ -56,10 +60,9 @@ Follow the [Rust installation guide](https://rust-lang.github.io/rustup/installa
 * [The dialog also doesn't allow keyboard input](https://github.com/Marko19907/OLEDShift/issues/4)
 * [The ARM64 build was not tested on an actual WOA machine, but it should work](https://github.com/Marko19907/OLEDShift/issues/5)
 * [The user can't specify the amount of pixels to move the windows by (yet)](https://github.com/Marko19907/OLEDShift/issues/6)
-
+* [Data is not persisted between sessions, settings revert to defaults on every launch](https://github.com/Marko19907/OLEDShift/issues/9)
 
 ## Limitations
 
 * Only works on Windows
 * [Animations are not supported, windows are moved instantly (unsure if this is even possible)](https://github.com/Marko19907/OLEDShift/issues/8)
-* [Data is not persisted between sessions, settings revert to defaults on every launch](https://github.com/Marko19907/OLEDShift/issues/9)
