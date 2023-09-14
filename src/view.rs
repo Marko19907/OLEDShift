@@ -150,15 +150,17 @@ impl SystemTray {
 
     /// Updates the tooltip to reflect the current state of the controller
     fn update_tooltip(&self) {
-        let interval = self.controller.lock().unwrap().get_interval();
+        let controller = self.controller.lock().unwrap();
+
+        let pause = if controller.is_running() { "running" } else { "paused" };
+        let interval = controller.get_interval();
+        let distance = controller.get_max_move();
+
+        drop(controller);
 
         let delay = self.format_interval(interval);
-
-        let pause = if self.controller.lock().unwrap().is_running() { "running" } else { "paused" };
-
-        let (max_x, max_y) = self.controller.lock().unwrap().get_max_move();
-
-        let tooltip = format!("OLEDShift\nStatus: {}\nDelay: {}\nMax distance: {}", pause, delay, self.format_distance(max_x, max_y));
+        let format_distance = self.format_distance(distance.0, distance.1);
+        let tooltip = format!("OLEDShift\nStatus: {}\nDelay: {}\nMax distance: {}", pause, delay, format_distance);
 
         self.tray.set_tip(&tooltip);
     }
