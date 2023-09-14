@@ -27,6 +27,28 @@ impl Delays {
     }
 }
 
+pub enum Distances {
+    Small = 25,
+    Medium = 50,
+    Large = 100,
+    Custom = 0,
+}
+
+impl Distances {
+    /// Converts a distance to a Distances enum
+    pub(crate) fn from_distance(max_x: i32, max_y: i32) -> Self {
+        if max_x != max_y {
+            return Distances::Custom;
+        }
+        match max_x {
+            x if x == Distances::Small as i32 => Distances::Small,
+            x if x == Distances::Medium as i32 => Distances::Medium,
+            x if x == Distances::Large as i32 => Distances::Large,
+            _ => Distances::Custom,
+        }
+    }
+}
+
 lazy_static! {
     pub static ref MAX_MOVE: Mutex<(i32, i32)> = Mutex::new((50, 50));
 }
