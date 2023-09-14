@@ -100,6 +100,7 @@ impl SystemTray {
             },
         }
         self.update_distance_menu();
+        self.update_tooltip();
     }
 
     /// Opens a dialog to set a custom distance
@@ -155,7 +156,10 @@ impl SystemTray {
 
         let pause = if self.controller.lock().unwrap().is_running() { "running" } else { "paused" };
 
-        let tooltip = format!("OLEDShift\nStatus: {}\nDelay: {}", pause, delay);
+        let (max_x, max_y) = self.controller.lock().unwrap().get_max_move();
+
+        let tooltip = format!("OLEDShift\nStatus: {}\nDelay: {}\nMax distance: {}", pause, delay, self.format_distance(max_x, max_y));
+
         self.tray.set_tip(&tooltip);
     }
 
@@ -181,6 +185,18 @@ impl SystemTray {
         }
 
         return format!("{} minute{} and {} second{} (Custom)", minutes, if minutes == 1 { "" } else { "s" }, seconds, if seconds == 1 { "" } else { "s" });
+    }
+
+    /// Formats the distance into a human readable string
+    fn format_distance(&self, max_x: i32, max_y: i32) -> String {
+        match Distances::from_distance(max_x, max_y) {
+            Distances::Small => return "25 px (Small)".to_string(),
+            Distances::Medium => return "50 px (Medium)".to_string(),
+            Distances::Large => return "100 px (Large)".to_string(),
+            _ => {}
+        }
+
+        return format!("{} px (x) {} px (y) (Custom)", max_x, max_y);
     }
 
     /// Callback for the dialog notice
@@ -214,6 +230,7 @@ impl SystemTray {
                     DistanceDialogData::Value(distance_x, distance_y) => {
                         self.controller.lock().unwrap().set_max_move(distance_x, distance_y);
                         self.update_distance_menu();
+                        self.update_tooltip();
                     },
                     DistanceDialogData::Cancel => {}
                 }
