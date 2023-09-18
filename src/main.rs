@@ -13,7 +13,8 @@ use view::SystemTray;
 mod view;
 mod mover;
 mod controller;
-mod spin_dialog;
+mod delay_dialog;
+mod distance_dialog;
 
 
 fn main() {

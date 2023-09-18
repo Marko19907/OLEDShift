@@ -8,10 +8,12 @@ use std::sync::Once;
 use libloading::Library;
 use rand::Rng;
 use winapi::{
+    um::shellapi::{ABM_GETSTATE, ABS_AUTOHIDE, APPBARDATA, SHAppBarMessage},
     shared::minwindef::{BOOL, DWORD, LPARAM, TRUE, UINT, LPVOID},
     shared::basetsd::UINT_PTR,
-    shared::windef::{RECT, HWND},
+    shared::windef::{RECT, HDC, HMONITOR, HWND},
     um::winuser::{
+        EnumDisplayMonitors,
         EnumWindows,
         DispatchMessageW,
         AnimateWindow,
@@ -23,6 +25,7 @@ use winapi::{
         HWND_TOP,
         IsWindowVisible,
         KillTimer,
+        MONITORINFOEXW,
         MONITOR_DEFAULTTONEAREST,
         MonitorFromWindow,
         MONITORINFO,
@@ -31,18 +34,16 @@ use winapi::{
         SetWindowPos,
         SM_CYSCREEN,
         SPI_GETWORKAREA,
+        SW_SHOWMAXIMIZED,
         SWP_NOSIZE,
         SWP_NOZORDER,
         SystemParametersInfoW,
         TranslateMessage,
         WINDOWPLACEMENT
-    }
+    },
 };
-use winapi::um::shellapi::{ABM_GETSTATE, ABS_AUTOHIDE, APPBARDATA, SHAppBarMessage};
-use winapi::um::winuser::SW_SHOWMAXIMIZED;
+use crate::controller::{MAX_MOVE};
 
-const MAX_MOVE_X: i32 = 50;
-const MAX_MOVE_Y: i32 = 50;
 
 /// A function pointer to the IsWindowArranged function in user32.dll
 static mut IS_WINDOW_ARRANGED: Option<unsafe extern "system" fn(c_int) -> bool> = None;
@@ -79,6 +80,43 @@ fn is_window_snapped(hwnd: HWND) -> bool {
         }
     }
     return false;
+}
+
+/// Returns the smallest screen size in the form (width, height).
+pub fn get_smallest_screen_size() -> Option<(i32, i32)> {
+    let mut screen_sizes: Vec<(i32, i32)> = Vec::new();
+
+    unsafe {
+        EnumDisplayMonitors(
+            ptr::null_mut(),
+            ptr::null_mut(),
+            Some(enum_display_monitors_callback),
+            &mut screen_sizes as *mut _ as LPARAM,
+        );
+    }
+
+    return screen_sizes.into_iter().min();
+}
+
+unsafe extern "system" fn enum_display_monitors_callback(
+    _hmonitor: HMONITOR,
+    _hdc: HDC,
+    _lprect: *mut RECT,
+    lparam: LPARAM,
+) -> BOOL {
+    let screen_sizes = &mut *(lparam as *mut Vec<(i32, i32)>);
+
+    let mut monitor_info: MONITORINFOEXW = mem::zeroed();
+    monitor_info.cbSize = mem::size_of::<MONITORINFOEXW>() as u32;
+
+    GetMonitorInfoW(_hmonitor, &mut monitor_info as *mut _ as *mut _);
+
+    let width = monitor_info.rcMonitor.right - monitor_info.rcMonitor.left;
+    let height = monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top;
+
+    screen_sizes.push((width, height));
+
+    return TRUE;
 }
 
 /// Returns true if the window is visible.
@@ -118,8 +156,10 @@ unsafe extern "system" fn enum_windows_proc(hwnd: HWND, _: LPARAM) -> BOOL {
         return TRUE;
     }
 
-    let max_move_x = i32::min(MAX_MOVE_X, screen_width - window_width);
-    let max_move_y = i32::min(MAX_MOVE_Y, screen_height - window_height);
+    let (max_x, max_y) = MAX_MOVE.lock().map(|guard| *guard).unwrap_or((50, 50));
+
+    let max_move_x = i32::min(max_x, screen_width - window_width);
+    let max_move_y = i32::min(max_y, screen_height - window_height);
 
     let mut rng = rand::thread_rng();
     let random_x = wp.rcNormalPosition.left + rng.gen_range(0..(2 * max_move_x + 1)) - max_move_x;

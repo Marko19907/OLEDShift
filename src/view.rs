@@ -1,7 +1,8 @@
 use std::{thread, cell::RefCell};
 use std::sync::{Arc, Mutex};
-use crate::controller::{Controller, Delays};
-use crate::spin_dialog::{SpinDialogData, SpinDialog};
+use crate::controller::{Controller, Delays, Distances};
+use crate::delay_dialog::{DelayDialogData, DelayDialog};
+use crate::distance_dialog::{DistanceDialog, DistanceDialogData};
 
 pub static ICON: &[u8] = include_bytes!("../icon.ico");
 
@@ -18,12 +19,19 @@ pub struct SystemTray {
     delay_2_menu: nwg::MenuItem,
     delay_5_menu: nwg::MenuItem,
     delay_custom_menu: nwg::MenuItem,
-    distance_menu: nwg::MenuItem,
+    distance_menu: nwg::Menu,
+    distance_small_menu: nwg::MenuItem,
+    distance_medium_menu: nwg::MenuItem,
+    distance_large_menu: nwg::MenuItem,
+    distance_custom_menu: nwg::MenuItem,
     exit_menu: nwg::MenuItem,
-    separator: nwg::MenuSeparator,
+    separator_delay: nwg::MenuSeparator,
+    separator_distance: nwg::MenuSeparator,
     controller: Arc<Mutex<Controller>>,
-    delay_dialog_data: RefCell<Option<thread::JoinHandle<SpinDialogData>>>,
+    delay_dialog_data: RefCell<Option<thread::JoinHandle<DelayDialogData>>>,
     delay_dialog_notice: nwg::Notice,
+    distance_dialog_data: RefCell<Option<thread::JoinHandle<DistanceDialogData>>>,
+    distance_dialog_notice: nwg::Notice,
 }
 
 impl SystemTray {
@@ -42,11 +50,6 @@ impl SystemTray {
         self.tray_menu.popup(x, y);
     }
 
-    fn show_delay_menu(&self) {
-        let (x, y) = nwg::GlobalCursor::position();
-        self.delay_menu.popup(x, y);
-    }
-
     fn toggle_enabled(&self) {
         println!("Toggling enabled called");
         self.controller.lock().unwrap().toggle_running();
@@ -56,11 +59,6 @@ impl SystemTray {
 
     fn hello1(&self) {
         nwg::modal_info_message(&self.window, "Hello", "Hello World!");
-    }
-
-    fn hello2(&self) {
-        let flags = nwg::TrayNotificationFlags::USER_ICON | nwg::TrayNotificationFlags::LARGE_ICON;
-        self.tray.show("Hello World", Some("Welcome to my application"), Some(flags), Some(&self.icon));
     }
 
     fn show_start_message(&self) {
@@ -85,9 +83,34 @@ impl SystemTray {
 
     /// Opens a dialog to set a custom delay
     fn delay_custom(&self) {
-        *self.delay_dialog_data.borrow_mut() = Some(SpinDialog::popup(
+        *self.delay_dialog_data.borrow_mut() = Some(DelayDialog::popup(
             self.delay_dialog_notice.sender(),
             self.controller.lock().unwrap().get_interval()
+        ));
+    }
+
+    fn do_distance(&self, distance: Distances) {
+        match distance {
+            Distances::Small => self.controller.lock().unwrap().set_max_move(Distances::Small as i32, Distances::Small as i32),
+            Distances::Medium => self.controller.lock().unwrap().set_max_move(Distances::Medium as i32, Distances::Medium as i32),
+            Distances::Large => self.controller.lock().unwrap().set_max_move(Distances::Large as i32, Distances::Large as i32),
+            Distances::Custom => {
+                self.distance_custom();
+                return; // Don't update the menu or tooltip, will be done when the dialog closes in the callback
+            },
+        }
+        self.update_distance_menu();
+        self.update_tooltip();
+    }
+
+    /// Opens a dialog to set a custom distance
+    fn distance_custom(&self) {
+        let (max_x, max_y) = self.controller.lock().unwrap().get_max_move();
+
+        *self.distance_dialog_data.borrow_mut() = Some(DistanceDialog::popup(
+            self.distance_dialog_notice.sender(),
+            max_x,
+            max_y
         ));
     }
 
@@ -111,15 +134,34 @@ impl SystemTray {
         }
     }
 
+    /// Updates the distance menu item to reflect the current state of the controller
+    fn update_distance_menu(&self) {
+        [&self.distance_small_menu, &self.distance_medium_menu, &self.distance_large_menu, &self.distance_custom_menu].iter()
+            .for_each(|x| x.set_checked(false));
+
+        let (max_x, max_y) = self.controller.lock().unwrap().get_max_move();
+        match Distances::from_distance(max_x, max_y) {
+            Distances::Small => self.distance_small_menu.set_checked(true),
+            Distances::Medium => self.distance_medium_menu.set_checked(true),
+            Distances::Large => self.distance_large_menu.set_checked(true),
+            _ => self.distance_custom_menu.set_checked(true),
+        }
+    }
+
     /// Updates the tooltip to reflect the current state of the controller
     fn update_tooltip(&self) {
-        let interval = self.controller.lock().unwrap().get_interval();
+        let controller = self.controller.lock().unwrap();
+
+        let pause = if controller.is_running() { "running" } else { "paused" };
+        let interval = controller.get_interval();
+        let distance = controller.get_max_move();
+
+        drop(controller);
 
         let delay = self.format_interval(interval);
+        let format_distance = self.format_distance(distance.0, distance.1);
+        let tooltip = format!("OLEDShift\nStatus: {}\nDelay: {}\nMax distance: {}", pause, delay, format_distance);
 
-        let pause = if self.controller.lock().unwrap().is_running() { "running" } else { "paused" };
-
-        let tooltip = format!("OLEDShift\nStatus: {}\nDelay: {}", pause, delay);
         self.tray.set_tip(&tooltip);
     }
 
@@ -147,6 +189,18 @@ impl SystemTray {
         return format!("{} minute{} and {} second{} (Custom)", minutes, if minutes == 1 { "" } else { "s" }, seconds, if seconds == 1 { "" } else { "s" });
     }
 
+    /// Formats the distance into a human readable string
+    fn format_distance(&self, max_x: i32, max_y: i32) -> String {
+        match Distances::from_distance(max_x, max_y) {
+            Distances::Small => return "25 px (Small)".to_string(),
+            Distances::Medium => return "50 px (Medium)".to_string(),
+            Distances::Large => return "100 px (Large)".to_string(),
+            _ => {}
+        }
+
+        return format!("{} px (x) {} px (y) (Custom)", max_x, max_y);
+    }
+
     /// Callback for the dialog notice
     fn read_delay_dialog_output(&self) {
         let data = self.delay_dialog_data.borrow_mut().take();
@@ -155,12 +209,32 @@ impl SystemTray {
                 let dialog_result = handle.join().unwrap();
 
                 match dialog_result {
-                    SpinDialogData::Value(delay) => {
+                    DelayDialogData::Value(delay) => {
                         self.controller.lock().unwrap().set_interval(delay);
                         self.update_delay_menu();
                         self.update_tooltip();
                     },
-                    SpinDialogData::Cancel => {}
+                    DelayDialogData::Cancel => {}
+                }
+            },
+            None => {}
+        }
+    }
+
+    /// Callback for the distance dialog notice
+    fn read_distance_dialog_output(&self) {
+        let data = self.distance_dialog_data.borrow_mut().take();
+        match data {
+            Some(handle) => {
+                let dialog_result = handle.join().unwrap();
+
+                match dialog_result {
+                    DistanceDialogData::Value(distance_x, distance_y) => {
+                        self.controller.lock().unwrap().set_max_move(distance_x, distance_y);
+                        self.update_distance_menu();
+                        self.update_tooltip();
+                    },
+                    DistanceDialogData::Cancel => {}
                 }
             },
             None => {}
@@ -181,7 +255,7 @@ mod system_tray_ui {
     use std::rc::Rc;
     use std::cell::RefCell;
     use std::ops::Deref;
-    use crate::controller::{Controller, Delays};
+    use crate::controller::{Controller, Delays, Distances};
     use crate::view::{ICON, SystemTray};
 
     pub struct SystemTrayUi {
@@ -246,23 +320,45 @@ mod system_tray_ui {
 
             nwg::MenuSeparator::builder()
                 .parent(&data.delay_menu)
-                .build(&mut data.separator)?;
+                .build(&mut data.separator_delay)?;
 
             nwg::MenuItem::builder()
                 .text("Custom delay")
                 .parent(&data.delay_menu)
                 .build(&mut data.delay_custom_menu)?;
 
-            // TODO: Implement this, the MenuItem is disabled for now
-            nwg::MenuItem::builder()
-                .text("Set max distance")
-                .disabled(true)
+            nwg::Menu::builder()
+                .text("Max distance")
                 .parent(&data.tray_menu)
                 .build(&mut data.distance_menu)?;
 
+            nwg::MenuItem::builder()
+                .text("Small, 25 px")
+                .parent(&data.distance_menu)
+                .build(&mut data.distance_small_menu)?;
+
+            nwg::MenuItem::builder()
+                .text("Medium, 50 px")
+                .parent(&data.distance_menu)
+                .build(&mut data.distance_medium_menu)?;
+
+            nwg::MenuItem::builder()
+                .text("Large, 100 px")
+                .parent(&data.distance_menu)
+                .build(&mut data.distance_large_menu)?;
+
+            nwg::MenuSeparator::builder()
+                .parent(&data.distance_menu)
+                .build(&mut data.separator_distance)?;
+
+            nwg::MenuItem::builder()
+                .text("Custom distance")
+                .parent(&data.distance_menu)
+                .build(&mut data.distance_custom_menu)?;
+
             nwg::MenuSeparator::builder()
                 .parent(&data.tray_menu)
-                .build(&mut data.separator)?;
+                .build(&mut data.separator_delay)?;
 
             nwg::MenuItem::builder()
                 .text("Exit")
@@ -273,6 +369,10 @@ mod system_tray_ui {
             nwg::Notice::builder()
                 .parent(&data.window)
                 .build(&mut data.delay_dialog_notice)?;
+
+            nwg::Notice::builder()
+                .parent(&data.window)
+                .build(&mut data.distance_dialog_notice)?;
 
             // Wrap-up
             let ui = SystemTrayUi {
@@ -285,6 +385,7 @@ mod system_tray_ui {
 
             // Update the UI to reflect the controller state at startup
             ui.inner.update_delay_menu();
+            ui.inner.update_distance_menu();
             ui.inner.update_toggle();
             ui.inner.update_tooltip();
 
@@ -299,6 +400,9 @@ mod system_tray_ui {
                             if &handle == &evt_ui.delay_dialog_notice {
                                 SystemTray::read_delay_dialog_output(&evt_ui);
                             }
+                            else if &handle == &evt_ui.distance_dialog_notice {
+                                SystemTray::read_distance_dialog_output(&evt_ui);
+                            }
                         E::OnContextMenu =>
                             if &handle == &evt_ui.tray {
                                 SystemTray::show_menu(&evt_ui);
@@ -306,9 +410,6 @@ mod system_tray_ui {
                         E::OnMenuItemSelected =>
                             if &handle == &evt_ui.enabled_toggle {
                                 SystemTray::toggle_enabled(&evt_ui);
-                            }
-                            else if &handle == &evt_ui.delay_menu {
-                                SystemTray::show_delay_menu(&evt_ui);
                             }
                             else if &handle == &evt_ui.delay_30_menu {
                                 SystemTray::do_delay(&evt_ui, Delays::ThirtySeconds)
@@ -325,8 +426,17 @@ mod system_tray_ui {
                             else if &handle == &evt_ui.delay_custom_menu {
                                 SystemTray::do_delay(&evt_ui, Delays::Custom);
                             }
-                            else if &handle == &evt_ui.distance_menu {
-                                SystemTray::hello2(&evt_ui);
+                            else if &handle == &evt_ui.distance_small_menu {
+                                SystemTray::do_distance(&evt_ui, Distances::Small)
+                            }
+                            else if &handle == &evt_ui.distance_medium_menu {
+                                SystemTray::do_distance(&evt_ui, Distances::Medium)
+                            }
+                            else if &handle == &evt_ui.distance_large_menu {
+                                SystemTray::do_distance(&evt_ui, Distances::Large)
+                            }
+                            else if &handle == &evt_ui.distance_custom_menu {
+                                SystemTray::do_distance(&evt_ui, Distances::Custom);
                             }
                             else if &handle == &evt_ui.exit_menu {
                                 SystemTray::exit(&evt_ui);
