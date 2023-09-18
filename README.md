@@ -59,7 +59,6 @@ Follow the [Rust installation guide](https://rust-lang.github.io/rustup/installa
 * [The dialog doesn't have an icon](https://github.com/Marko19907/OLEDShift/issues/3)
 * [The dialog also doesn't allow keyboard input](https://github.com/Marko19907/OLEDShift/issues/4)
 * [The ARM64 build was not tested on an actual WOA machine, but it should work](https://github.com/Marko19907/OLEDShift/issues/5)
-* [The user can't specify the amount of pixels to move the windows by (yet)](https://github.com/Marko19907/OLEDShift/issues/6)
 * [Data is not persisted between sessions, settings revert to defaults on every launch](https://github.com/Marko19907/OLEDShift/issues/9)
 
 ## Limitations
