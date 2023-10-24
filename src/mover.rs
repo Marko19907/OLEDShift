@@ -4,7 +4,11 @@ use std::{
     os::raw::c_int,
     time::{SystemTime, UNIX_EPOCH}
 };
+use std::collections::HashSet;
+use std::ffi::OsString;
+use std::os::windows::ffi::OsStringExt;
 use std::sync::Once;
+use lazy_static::lazy_static;
 use libloading::Library;
 use rand::Rng;
 use winapi::{
@@ -42,8 +46,18 @@ use winapi::{
         WINDOWPLACEMENT
     },
 };
+use winapi::um::winuser::GetWindowTextW;
 use crate::controller::{MAX_MOVE};
 
+
+/// A set of window titles that should be excluded from being moved.
+lazy_static! {
+    static ref EXCLUSIONS: HashSet<&'static str> = {
+        [
+            "NarratorHelperWindow",
+        ].iter().cloned().collect()
+    };
+}
 
 /// A function pointer to the IsWindowArranged function in user32.dll
 static mut IS_WINDOW_ARRANGED: Option<unsafe extern "system" fn(c_int) -> bool> = None;
@@ -129,6 +143,16 @@ fn is_window_maximized(wp: &WINDOWPLACEMENT) -> bool {
     return wp.showCmd as i32 == SW_SHOWMAXIMIZED;
 }
 
+/// Returns true if the window should be excluded from being moved based on its title.
+fn is_excluded(hwnd: HWND) -> bool {
+    // Get the window title
+    let mut title = [0u16; 1024];
+    let title_length = unsafe { GetWindowTextW(hwnd, title.as_mut_ptr(), 1024) } as usize;
+    let title = OsString::from_wide(&title[..title_length]);
+
+    return EXCLUSIONS.contains(title.to_str().unwrap_or(""));
+}
+
 unsafe extern "system" fn enum_windows_proc(hwnd: HWND, _: LPARAM) -> BOOL {
     if !is_window_visible(hwnd) {
         return TRUE;
@@ -137,7 +161,7 @@ unsafe extern "system" fn enum_windows_proc(hwnd: HWND, _: LPARAM) -> BOOL {
     wp.length = mem::size_of::<WINDOWPLACEMENT>() as UINT;
     GetWindowPlacement(hwnd, &mut wp);
 
-    if is_window_maximized(&wp) || is_window_snapped(hwnd) {
+    if is_window_maximized(&wp) || is_window_snapped(hwnd) || is_excluded(hwnd) {
         return TRUE;
     }
 
