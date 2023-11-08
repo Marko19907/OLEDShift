@@ -46,15 +46,21 @@ use winapi::{
         WINDOWPLACEMENT
     },
 };
-use winapi::um::winuser::GetWindowTextW;
+use winapi::um::winuser::{GetClassNameW, GetWindowTextW};
 use crate::controller::{MAX_MOVE};
 
 
-/// A set of window titles that should be excluded from being moved.
 lazy_static! {
-    static ref EXCLUSIONS: HashSet<&'static str> = {
+    /// A set of window titles that should be excluded from being moved.
+    static ref TITLE_EXCLUSIONS: HashSet<&'static str> = {
         [
             "NarratorHelperWindow",
+        ].iter().cloned().collect()
+    };
+    /// A set of window classes that should be excluded from being moved.
+    static ref CLASS_EXCLUSIONS: HashSet<&'static str> = {
+        [
+            "#32768", // OLEDShift right click menu
         ].iter().cloned().collect()
     };
 }
@@ -143,14 +149,19 @@ fn is_window_maximized(wp: &WINDOWPLACEMENT) -> bool {
     return wp.showCmd as i32 == SW_SHOWMAXIMIZED;
 }
 
-/// Returns true if the window should be excluded from being moved based on its title.
+/// Returns true if the window should be excluded from being moved based on its title or class.
 fn is_excluded(hwnd: HWND) -> bool {
     // Get the window title
     let mut title = [0u16; 1024];
     let title_length = unsafe { GetWindowTextW(hwnd, title.as_mut_ptr(), 1024) } as usize;
     let title = OsString::from_wide(&title[..title_length]);
 
-    return EXCLUSIONS.contains(title.to_str().unwrap_or(""));
+    // Get the window class
+    let mut class_name = [0u16; 1024];
+    let class_length = unsafe { GetClassNameW(hwnd, class_name.as_mut_ptr(), 1024) } as usize;
+    let class_name = OsString::from_wide(&class_name[..class_length]);
+
+    return TITLE_EXCLUSIONS.contains(title.to_str().unwrap_or("")) || CLASS_EXCLUSIONS.contains(class_name.to_str().unwrap_or(""));
 }
 
 unsafe extern "system" fn enum_windows_proc(hwnd: HWND, _: LPARAM) -> BOOL {
