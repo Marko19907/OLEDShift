@@ -56,6 +56,7 @@ lazy_static! {
         [
             "#32768", // OLEDShift right click menu
             "NarratorHelperWindow", // A small circle/line, more info here: https://github.com/Marko19907/OLEDShift/issues/12
+            "TopLevelWindowForOverflowXamlIsland", // "Hidden Icon Menu", the flyout menu that appears when you click the arrow on the taskbar
         ].iter().cloned().collect()
     };
 }
