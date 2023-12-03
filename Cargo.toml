@@ -1,6 +1,6 @@
 [package]
-name = "hello-rust"
-version = "1.1.0"
+name = "OLEDShift"
+version = "1.1.1"
 edition = "2021"
 build = "build.rs"
 
@@ -14,7 +14,7 @@ codegen-units = 1
 OriginalFilename = "OLEDShift.exe"
 FileDescription = "OLEDShift"
 ProductName = "OLEDShift"
-ProductVersion = "1.1.0"
+ProductVersion = "1.1.1"
 
 [build-dependencies]
 winresource = "0.1.16"

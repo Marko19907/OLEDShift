@@ -3,6 +3,18 @@
 version = 3
 
 [[package]]
+name = "OLEDShift"
+version = "1.1.1"
+dependencies = [
+ "lazy_static",
+ "libloading",
+ "native-windows-gui",
+ "rand",
+ "winapi",
+ "winresource",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -48,18 +60,6 @@ name = "hashbrown"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c6201b9ff9fd90a5a3bac2e56a830d0caa509576f0e503818ee82c181b3437a"
-
-[[package]]
-name = "hello-rust"
-version = "1.1.0"
-dependencies = [
- "lazy_static",
- "libloading",
- "native-windows-gui",
- "rand",
- "winapi",
- "winresource",
-]
 
 [[package]]
 name = "indexmap"
