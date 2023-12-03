@@ -55,7 +55,7 @@ lazy_static! {
     static ref CLASS_EXCLUSIONS: HashSet<&'static str> = {
         [
             "#32768", // OLEDShift right click menu
-            "NarratorHelperWindow",
+            "NarratorHelperWindow", // A small circle/line, more info here: https://github.com/Marko19907/OLEDShift/issues/12
         ].iter().cloned().collect()
     };
 }
