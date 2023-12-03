@@ -4,7 +4,11 @@ use std::{
     os::raw::c_int,
     time::{SystemTime, UNIX_EPOCH}
 };
+use std::collections::HashSet;
+use std::ffi::OsString;
+use std::os::windows::ffi::OsStringExt;
 use std::sync::Once;
+use lazy_static::lazy_static;
 use libloading::Library;
 use rand::Rng;
 use winapi::{
@@ -42,8 +46,19 @@ use winapi::{
         WINDOWPLACEMENT
     },
 };
+use winapi::um::winuser::{GetClassNameW, GetWindowTextW};
 use crate::controller::{MAX_MOVE};
 
+
+lazy_static! {
+    /// A set of window classes that should be excluded from being moved.
+    static ref CLASS_EXCLUSIONS: HashSet<&'static str> = {
+        [
+            "#32768", // OLEDShift right click menu
+            "NarratorHelperWindow", // A small circle/line, more info here: https://github.com/Marko19907/OLEDShift/issues/12
+        ].iter().cloned().collect()
+    };
+}
 
 /// A function pointer to the IsWindowArranged function in user32.dll
 static mut IS_WINDOW_ARRANGED: Option<unsafe extern "system" fn(c_int) -> bool> = None;
@@ -129,6 +144,16 @@ fn is_window_maximized(wp: &WINDOWPLACEMENT) -> bool {
     return wp.showCmd as i32 == SW_SHOWMAXIMIZED;
 }
 
+/// Returns true if the window should be excluded from being moved based on its title or class.
+fn is_excluded(hwnd: HWND) -> bool {
+    // Get the window class
+    let mut class_name = [0u16; 1024];
+    let class_length = unsafe { GetClassNameW(hwnd, class_name.as_mut_ptr(), 1024) } as usize;
+    let class_name = OsString::from_wide(&class_name[..class_length]);
+
+    return CLASS_EXCLUSIONS.contains(class_name.to_str().unwrap_or(""));
+}
+
 unsafe extern "system" fn enum_windows_proc(hwnd: HWND, _: LPARAM) -> BOOL {
     if !is_window_visible(hwnd) {
         return TRUE;
@@ -137,7 +162,7 @@ unsafe extern "system" fn enum_windows_proc(hwnd: HWND, _: LPARAM) -> BOOL {
     wp.length = mem::size_of::<WINDOWPLACEMENT>() as UINT;
     GetWindowPlacement(hwnd, &mut wp);
 
-    if is_window_maximized(&wp) || is_window_snapped(hwnd) {
+    if is_window_maximized(&wp) || is_window_snapped(hwnd) || is_excluded(hwnd) {
         return TRUE;
     }
 
