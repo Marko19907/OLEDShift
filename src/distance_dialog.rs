@@ -35,7 +35,7 @@ impl DistanceDialog {
                 value: current_value_x as i64,
                 step: 1,
                 max: smallest_x as i64 / 4,
-                min: 5,
+                min: 1,
             };
             app.number_select_x.set_data(number_select_data_x);
 
@@ -43,7 +43,7 @@ impl DistanceDialog {
                 value: current_value_y as i64,
                 step: 1,
                 max: smallest_y as i64 / 4,
-                min: 5,
+                min: 1,
             };
             app.number_select_y.set_data(number_select_data_y);
 

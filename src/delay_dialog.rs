@@ -30,7 +30,7 @@ impl DelayDialog {
                 value: (current_value / 1000) as i64,
                 step: 1,    // 1 second
                 max: 1800,  // 30 minutes
-                min: 5,     // 5 seconds
+                min: 1,     // 1 second
             };
             app.number_select.set_data(number_select_data);
 
