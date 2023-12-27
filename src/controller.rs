@@ -3,6 +3,7 @@ use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
 use lazy_static::lazy_static;
+use crate::settings::SettingsManager;
 use crate::mover;
 
 /// The delays that can be selected from the tray menu, in milliseconds
@@ -50,37 +51,39 @@ impl Distances {
 }
 
 lazy_static! {
+    // This is a global variable that can be accessed from anywhere in the program
+    // It wasn't possible to pass the max move to the mover function since it's used in a C style callback, so this is the next best thing
     pub static ref MAX_MOVE: Mutex<(i32, i32)> = Mutex::new((50, 50));
 }
 
 pub(crate) struct Controller {
-    interval: i32,
-    running: bool,
+    settings_manager: SettingsManager,
 }
 
 impl Default for Controller {
     fn default() -> Self {
-        Self {
-            interval: Delays::ThirtySeconds as i32,
-            running: true,
-        }
+        return Self::new();
     }
 }
 
 impl Controller {
     pub fn new() -> Self {
-        Self::default()
+        let controller = Controller {
+            settings_manager: SettingsManager::new(),
+        };
+        controller.update_max_move();
+        return controller;
     }
 
     pub fn run(controller: Arc<Mutex<Self>>) {
         thread::Builder::new().name("mover_thread".to_string()).spawn(move || {
-            let interval = controller.lock().unwrap().interval as u64;
+            let interval = controller.lock().unwrap().get_interval() as u64;
             sleep(Duration::from_millis(interval)); // Wait for the first interval, don't move windows immediately
 
             loop {
                 let controller = controller.lock().unwrap();
-                let running = controller.running;
-                let interval = controller.interval as u64;
+                let running = controller.is_running();
+                let interval = controller.get_interval() as u64;
                 drop(controller);
 
                 if running {
@@ -93,26 +96,32 @@ impl Controller {
     }
 
     pub fn get_interval(&self) -> i32 {
-        self.interval
+        return self.settings_manager.get_delay();
     }
 
     pub fn set_interval(&mut self, interval: i32) {
-        self.interval = interval;
+        self.settings_manager.set_delay(interval);
     }
 
     pub fn is_running(&self) -> bool {
-        self.running
+        return self.settings_manager.is_running();
     }
 
     pub fn toggle_running(&mut self) {
-        self.running = !self.running;
+        self.settings_manager.toggle_running();
     }
 
     pub fn get_max_move(&self) -> (i32, i32) {
-        return *MAX_MOVE.lock().unwrap();
+        return self.settings_manager.get_max_distance();
     }
 
     pub fn set_max_move(&mut self, max_move_x: i32, max_move_y: i32) {
         *MAX_MOVE.lock().unwrap() = (max_move_x, max_move_y);
+        self.settings_manager.set_max_distance(max_move_x, max_move_y);
+    }
+
+    /// Updates the max move from the settings file, to be used on startup
+    fn update_max_move(&self) {
+        *MAX_MOVE.lock().unwrap() = self.settings_manager.get_max_distance();
     }
 }
