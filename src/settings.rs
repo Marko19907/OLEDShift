@@ -19,7 +19,7 @@ impl Settings {
             delay: 30000, // 30 seconds // TODO: Use Delays::ThirtySeconds perhaps or move this to seconds instead of milliseconds
             max_distance_x: 50,
             max_distance_y: 50,
-        }
+        };
     }
 
     pub fn get_running(&self) -> bool {
@@ -32,7 +32,7 @@ impl Settings {
 
     /// Returns the delay in milliseconds
     pub fn get_delay(&self) -> i32 {
-        return self.delay
+        return self.delay;
     }
 
     /// Sets the delay, in milliseconds
@@ -66,6 +66,14 @@ const PATH: &str = "settings.json";
 
 pub struct SettingsManager {
     settings: Arc<Mutex<Settings>>,
+}
+
+impl Default for SettingsManager {
+    fn default() -> Self {
+        return SettingsManager {
+            settings: Arc::new(Mutex::new(Settings::default())),
+        };
+    }
 }
 
 impl SettingsManager {

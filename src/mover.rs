@@ -46,7 +46,7 @@ use winapi::{
         WINDOWPLACEMENT
     },
 };
-use winapi::um::winuser::{GetClassNameW, GetWindowTextW};
+use winapi::um::winuser::GetClassNameW;
 use crate::controller::{MAX_MOVE};
 
 

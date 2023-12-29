@@ -62,17 +62,17 @@ pub(crate) struct Controller {
 
 impl Default for Controller {
     fn default() -> Self {
-        return Self::new();
+        let controller = Controller {
+            settings_manager: SettingsManager::default(),
+        };
+        controller.update_max_move();
+        return controller;
     }
 }
 
 impl Controller {
     pub fn new() -> Self {
-        let controller = Controller {
-            settings_manager: SettingsManager::new(),
-        };
-        controller.update_max_move();
-        return controller;
+        return Controller::default();
     }
 
     pub fn run(controller: Arc<Mutex<Self>>) {

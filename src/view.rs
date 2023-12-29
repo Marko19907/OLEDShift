@@ -35,16 +35,6 @@ pub struct SystemTray {
 }
 
 impl SystemTray {
-
-    fn new(&self) -> Self {
-        let controller = Arc::new(Mutex::new(Controller::new()));
-
-        return SystemTray {
-            controller,
-            ..Default::default()
-        };
-    }
-
     fn show_menu(&self) {
         let (x, y) = nwg::GlobalCursor::position();
         self.tray_menu.popup(x, y);
