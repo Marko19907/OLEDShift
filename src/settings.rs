@@ -77,25 +77,39 @@ impl Default for SettingsManager {
 }
 
 impl SettingsManager {
-    pub fn new() -> Self {
+    pub fn new() -> Result<SettingsManager, (String, SettingsManager)> {
         println!("Loading settings...");
 
         if !std::path::Path::new(PATH).exists() {
             println!("No settings file found, creating default settings...");
             let settings = Settings::default();
             let serialized = serde_json::to_string_pretty(&settings).unwrap();
-            write(PATH, serialized).unwrap();
+            if let Err(err) = write(PATH, serialized) {
+                eprintln!("Failed to create the default settings file: {}", err);
+            }
         }
 
-        let mut file = File::open(PATH).unwrap();
-        let mut contents = String::new();
-        file.read_to_string(&mut contents).unwrap();
-        let settings: Settings = serde_json::from_str(&contents).unwrap();
+        let result = File::open(PATH)
+            .and_then(|mut file| {
+                let mut contents = String::new();
+                file.read_to_string(&mut contents)?;
+                Ok(serde_json::from_str::<Settings>(&contents)?)
+            });
 
-        println!("Done!");
-
-        return SettingsManager {
-            settings: Arc::new(Mutex::new(settings)),
+        match result {
+            Ok(settings) => {
+                println!("Settings loaded successfully!");
+                Ok(SettingsManager {
+                    settings: Arc::new(Mutex::new(settings)),
+                })
+            }
+            Err(err) => {
+                // Send the error message back to the UI with the default settings
+                Err((
+                    err.to_string(),
+                    SettingsManager::default(),
+                ))
+            }
         }
     }
 
