@@ -75,6 +75,13 @@ impl Controller {
         return Controller::default();
     }
 
+    /// Sets the settings manager for the controller
+    pub fn set_settings(controller: Arc<Mutex<Self>>, settings: SettingsManager) {
+        let mut controller = controller.lock().unwrap();
+        controller.settings_manager = settings;
+        controller.update_max_move();
+    }
+
     pub fn run(controller: Arc<Mutex<Self>>) {
         thread::Builder::new().name("mover_thread".to_string()).spawn(move || {
             let interval = controller.lock().unwrap().get_interval() as u64;
