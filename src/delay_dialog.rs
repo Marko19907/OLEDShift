@@ -1,5 +1,6 @@
 use std::{thread, cell::RefCell};
 use nwg::{ControlHandle, NativeUi, NumberSelectData};
+use crate::settings::{LOWEST_DELAY, MAX_DELAY};
 
 pub enum DelayDialogData {
     Cancel,
@@ -28,9 +29,9 @@ impl DelayDialog {
 
             let number_select_data = NumberSelectData::Int {
                 value: (current_value / 1000) as i64,
-                step: 1,    // 1 second
-                max: 1800,  // 30 minutes
-                min: 1,     // 1 second
+                step: 1,                    // 1 second steps
+                max: MAX_DELAY as i64,      // 30 minutes
+                min: LOWEST_DELAY as i64,   // 1 second
             };
             app.number_select.set_data(number_select_data);
 
