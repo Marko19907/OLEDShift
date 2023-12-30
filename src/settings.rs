@@ -2,21 +2,31 @@ use std::fs::{File, write};
 use std::io::Read;
 use std::sync::{Arc, Mutex};
 use serde::{Deserialize, Serialize};
+use crate::controller::Delays;
 
 #[derive(Serialize, Deserialize)]
 pub struct Settings {
     running: bool,
-    delay: i32,
+    delay_milliseconds: i32,
     max_distance_x: i32,
     max_distance_y: i32,
 }
+
+/// Lowest delay allowed, in milliseconds (1 second)
+pub const LOWEST_DELAY: i32 = 1000;
+
+/// Highest delay allowed, in milliseconds (30 minutes)
+pub const MAX_DELAY: i32 = 1800000;
+
+/// Lowest max distance allowed, in pixels
+pub const LOWEST_MAX_DISTANCE: i32 = 1;
 
 impl Settings {
     fn default() -> Self {
         // The default settings
         return Settings {
             running: true,
-            delay: 30000, // 30 seconds // TODO: Use Delays::ThirtySeconds perhaps or move this to seconds instead of milliseconds
+            delay_milliseconds: Delays::ThirtySeconds as i32,
             max_distance_x: 50,
             max_distance_y: 50,
         };
@@ -32,22 +42,22 @@ impl Settings {
 
     /// Returns the delay in milliseconds
     pub fn get_delay(&self) -> i32 {
-        return self.delay;
+        return self.delay_milliseconds;
     }
 
     /// Sets the delay, in milliseconds
     pub fn set_delay(&mut self, delay: i32) {
-        self.delay = delay;
+        self.delay_milliseconds = delay;
     }
 
     /// Returns the delay in seconds
     pub fn get_delay_seconds(&self) -> i32 {
-        return self.delay / 1000;
+        return self.delay_milliseconds / 1000;
     }
 
     /// Sets the delay, in seconds
     pub fn set_delay_seconds(&mut self, delay: i32) {
-        self.delay = delay * 1000;
+        self.delay_milliseconds = delay * 1000;
     }
 
     pub fn get_max_distance(&self) -> (i32, i32) {
@@ -96,8 +106,52 @@ impl SettingsManager {
                 Ok(serde_json::from_str::<Settings>(&contents)?)
             });
 
-        match result {
-            Ok(settings) => {
+        return match result {
+            Ok(mut settings) => {
+                let mut errors: Vec<String> = Vec::new();
+
+                // Validate the settings and update them if necessary since the user could have edited the settings file
+                if settings.delay_milliseconds < LOWEST_DELAY {
+                    settings.delay_milliseconds = LOWEST_DELAY;
+                    errors.push(
+                        format!("The delay was too low, it has been set to the lowest possible value of {} second.", LOWEST_DELAY / 1000)
+                    );
+                }
+                if settings.delay_milliseconds > MAX_DELAY {
+                    settings.delay_milliseconds = MAX_DELAY;
+                    errors.push(
+                        format!("The delay was too high, it has been set to the highest possible value of {} seconds.", MAX_DELAY / 1000)
+                    );
+                }
+
+                if settings.max_distance_x < LOWEST_MAX_DISTANCE {
+                    settings.max_distance_x = LOWEST_MAX_DISTANCE;
+                    errors.push(
+                        format!("The max distance X was too low, it has been set to the lowest possible value of {} pixel.", LOWEST_MAX_DISTANCE)
+                    );
+                }
+                if settings.max_distance_y < LOWEST_MAX_DISTANCE {
+                    settings.max_distance_y = LOWEST_MAX_DISTANCE;
+                    errors.push(
+                        format!("The max distance Y was too low, it has been set to the lowest possible value of {} pixel.", LOWEST_MAX_DISTANCE)
+                    );
+                }
+
+                if !errors.is_empty() {
+                    println!("Found invalid values in the settings file!");
+
+                    // Update the settings file with the valid settings
+                    let serialized = serde_json::to_string_pretty(&settings).expect("Failed to serialize the settings");
+                    if let Err(err) = write(PATH, serialized) {
+                        eprintln!("Failed to update the settings file: {}", err);
+                    }
+
+                    return Err((
+                        errors.join("\n"),
+                        SettingsManager::default(),
+                    ));
+                }
+
                 println!("Settings loaded successfully!");
                 Ok(SettingsManager {
                     settings: Arc::new(Mutex::new(settings)),
@@ -144,13 +198,13 @@ impl SettingsManager {
 
     pub fn get_delay(&self) -> i32 {
         let settings = self.settings.lock().unwrap();
-        return settings.delay;
+        return settings.delay_milliseconds;
     }
 
     /// Sets the delay, in milliseconds, and saves the settings to the settings file
     pub fn set_delay(&self, delay: i32) {
         let mut settings = self.settings.lock().unwrap();
-        settings.delay = delay;
+        settings.delay_milliseconds = delay;
         SettingsManager::save_settings(&*settings);
     }
 
