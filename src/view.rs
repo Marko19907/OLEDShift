@@ -35,16 +35,6 @@ pub struct SystemTray {
 }
 
 impl SystemTray {
-
-    fn new(&self) -> Self {
-        let controller = Arc::new(Mutex::new(Controller::new()));
-
-        return SystemTray {
-            controller,
-            ..Default::default()
-        };
-    }
-
     fn show_menu(&self) {
         let (x, y) = nwg::GlobalCursor::position();
         self.tray_menu.popup(x, y);
@@ -64,6 +54,12 @@ impl SystemTray {
     fn show_start_message(&self) {
         let flags = nwg::TrayNotificationFlags::USER_ICON | nwg::TrayNotificationFlags::LARGE_ICON;
         self.tray.show("OLEDShift", Some("OLEDShift is running in the system tray"), Some(flags), Some(&self.icon));
+    }
+
+    /// Shows the failed to parse the config file error message
+    fn show_config_parse_failed_message(&self, error_message: &str) {
+        let message = format!("Failed to parse the config file!\nThe default settings will be used instead.\n\nError: {}", error_message);
+        nwg::modal_error_message(&self.window, "Config parsing failed", &message);
     }
 
     fn do_delay(&self, delay: Delays) {
@@ -256,6 +252,7 @@ mod system_tray_ui {
     use std::cell::RefCell;
     use std::ops::Deref;
     use crate::controller::{Controller, Delays, Distances};
+    use crate::settings::SettingsManager;
     use crate::view::{ICON, SystemTray};
 
     pub struct SystemTrayUi {
@@ -380,6 +377,12 @@ mod system_tray_ui {
                 default_handler: Default::default(),
             };
 
+            // Setup the controller
+            let settings_manager = SettingsManager::new().unwrap_or_else(|(err, manager)| {
+                ui.inner.show_config_parse_failed_message(&err);
+                return manager;
+            });
+            Controller::set_settings(ui.inner.controller.clone(), settings_manager);
             // Start the controller
             Controller::run(ui.inner.controller.clone());
 

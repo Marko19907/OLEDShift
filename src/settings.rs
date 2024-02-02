@@ -1,0 +1,234 @@
+use std::fs::{File, write};
+use std::io::Read;
+use std::sync::{Arc, Mutex};
+use serde::{Deserialize, Serialize};
+use crate::controller::Delays;
+
+#[derive(Serialize, Deserialize)]
+pub struct Settings {
+    running: bool,
+    delay_milliseconds: i32,
+    max_distance_x: i32,
+    max_distance_y: i32,
+}
+
+/// Lowest delay allowed, in milliseconds (1 second)
+pub const LOWEST_DELAY: i32 = 1000;
+
+/// Highest delay allowed, in milliseconds (30 minutes)
+pub const MAX_DELAY: i32 = 1800000;
+
+/// Lowest max distance allowed, in pixels
+pub const LOWEST_MAX_DISTANCE: i32 = 1;
+
+impl Settings {
+    fn default() -> Self {
+        // The default settings
+        return Settings {
+            running: true,
+            delay_milliseconds: Delays::ThirtySeconds as i32,
+            max_distance_x: 50,
+            max_distance_y: 50,
+        };
+    }
+
+    pub fn get_running(&self) -> bool {
+        return self.running;
+    }
+
+    pub fn set_running(&mut self, running: bool) {
+        self.running = running;
+    }
+
+    /// Returns the delay in milliseconds
+    pub fn get_delay(&self) -> i32 {
+        return self.delay_milliseconds;
+    }
+
+    /// Sets the delay, in milliseconds
+    pub fn set_delay(&mut self, delay: i32) {
+        self.delay_milliseconds = delay;
+    }
+
+    /// Returns the delay in seconds
+    pub fn get_delay_seconds(&self) -> i32 {
+        return self.delay_milliseconds / 1000;
+    }
+
+    /// Sets the delay, in seconds
+    pub fn set_delay_seconds(&mut self, delay: i32) {
+        self.delay_milliseconds = delay * 1000;
+    }
+
+    pub fn get_max_distance(&self) -> (i32, i32) {
+        return (self.max_distance_x, self.max_distance_y);
+    }
+
+    pub fn set_max_distance(&mut self, max_distance_x: i32, max_distance_y: i32) {
+        self.max_distance_x = max_distance_x;
+        self.max_distance_y = max_distance_y;
+    }
+}
+
+
+
+const PATH: &str = "settings.json";
+
+pub struct SettingsManager {
+    settings: Arc<Mutex<Settings>>,
+}
+
+impl Default for SettingsManager {
+    fn default() -> Self {
+        return SettingsManager {
+            settings: Arc::new(Mutex::new(Settings::default())),
+        };
+    }
+}
+
+impl SettingsManager {
+    pub fn new() -> Result<SettingsManager, (String, SettingsManager)> {
+        println!("Loading settings...");
+
+        if !std::path::Path::new(PATH).exists() {
+            println!("No settings file found, creating default settings...");
+            let settings = Settings::default();
+            let serialized = serde_json::to_string_pretty(&settings).unwrap();
+            if let Err(err) = write(PATH, serialized) {
+                eprintln!("Failed to create the default settings file: {}", err);
+            }
+        }
+
+        let result = File::open(PATH)
+            .and_then(|mut file| {
+                let mut contents = String::new();
+                file.read_to_string(&mut contents)?;
+                Ok(serde_json::from_str::<Settings>(&contents)?)
+            });
+
+        return match result {
+            Ok(mut settings) => {
+                let mut errors: Vec<String> = Vec::new();
+
+                // Validate the settings and update them if necessary since the user could have edited the settings file
+                if settings.delay_milliseconds < LOWEST_DELAY {
+                    settings.delay_milliseconds = LOWEST_DELAY;
+                    errors.push(
+                        format!("The delay was too low, it has been set to the lowest possible value of {} second.", LOWEST_DELAY / 1000)
+                    );
+                }
+                if settings.delay_milliseconds > MAX_DELAY {
+                    settings.delay_milliseconds = MAX_DELAY;
+                    errors.push(
+                        format!("The delay was too high, it has been set to the highest possible value of {} seconds.", MAX_DELAY / 1000)
+                    );
+                }
+
+                if settings.max_distance_x < LOWEST_MAX_DISTANCE {
+                    settings.max_distance_x = LOWEST_MAX_DISTANCE;
+                    errors.push(
+                        format!("The max distance X was too low, it has been set to the lowest possible value of {} pixel.", LOWEST_MAX_DISTANCE)
+                    );
+                }
+                if settings.max_distance_y < LOWEST_MAX_DISTANCE {
+                    settings.max_distance_y = LOWEST_MAX_DISTANCE;
+                    errors.push(
+                        format!("The max distance Y was too low, it has been set to the lowest possible value of {} pixel.", LOWEST_MAX_DISTANCE)
+                    );
+                }
+
+                if !errors.is_empty() {
+                    println!("Found invalid values in the settings file!");
+
+                    // Update the settings file with the valid settings
+                    let serialized = serde_json::to_string_pretty(&settings).expect("Failed to serialize the settings");
+                    if let Err(err) = write(PATH, serialized) {
+                        eprintln!("Failed to update the settings file: {}", err);
+                    }
+
+                    return Err((
+                        errors.join("\n"),
+                        SettingsManager::default(),
+                    ));
+                }
+
+                println!("Settings loaded successfully!");
+                Ok(SettingsManager {
+                    settings: Arc::new(Mutex::new(settings)),
+                })
+            }
+            Err(err) => {
+                // Send the error message back to the UI with the default settings
+                Err((
+                    err.to_string(),
+                    SettingsManager::default(),
+                ))
+            }
+        }
+    }
+
+    /// Serializes and saves the settings to the settings file
+    fn save_settings(settings: &Settings) {
+        let serialized = serde_json::to_string_pretty(settings).unwrap();
+        write(PATH, serialized).unwrap();
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Getters and setters
+    // ---------------------------------------------------------------------------------------------
+
+    pub fn is_running(&self) -> bool {
+        let settings = self.settings.lock().unwrap();
+        return settings.running;
+    }
+
+    /// Sets the running state, and saves the settings to the settings file
+    pub fn set_running(&self, running: bool) {
+        let mut settings = self.settings.lock().unwrap();
+        settings.running = running;
+        SettingsManager::save_settings(&*settings);
+    }
+
+    /// Toggles the running state, and saves the settings to the settings file
+    pub fn toggle_running(&self) {
+        let mut settings = self.settings.lock().unwrap();
+        settings.running = !settings.running;
+        SettingsManager::save_settings(&*settings);
+    }
+
+    pub fn get_delay(&self) -> i32 {
+        let settings = self.settings.lock().unwrap();
+        return settings.delay_milliseconds;
+    }
+
+    /// Sets the delay, in milliseconds, and saves the settings to the settings file
+    pub fn set_delay(&self, delay: i32) {
+        let mut settings = self.settings.lock().unwrap();
+        settings.delay_milliseconds = delay;
+        SettingsManager::save_settings(&*settings);
+    }
+
+    pub fn get_delay_seconds(&self) -> i32 {
+        let settings = self.settings.lock().unwrap();
+        return settings.get_delay_seconds();
+    }
+
+    /// Sets the delay, in seconds, and saves the settings to the settings file
+    pub fn set_delay_seconds(&self, delay: i32) {
+        let mut settings = self.settings.lock().unwrap();
+        settings.set_delay_seconds(delay);
+        SettingsManager::save_settings(&*settings);
+    }
+
+    pub fn get_max_distance(&self) -> (i32, i32) {
+        let settings = self.settings.lock().unwrap();
+        return settings.get_max_distance();
+    }
+
+    /// Sets the max distance, in pixels, and saves the settings to the settings file
+    pub fn set_max_distance(&self, max_distance_x: i32, max_distance_y: i32) {
+        let mut settings = self.settings.lock().unwrap();
+        settings.set_max_distance(max_distance_x, max_distance_y);
+        SettingsManager::save_settings(&*settings);
+    }
+}
