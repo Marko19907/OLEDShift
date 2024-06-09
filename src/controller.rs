@@ -26,6 +26,22 @@ impl Delays {
             _ => Delays::Custom,
         }
     }
+
+    /// Returns the delay in milliseconds
+    fn as_millis(&self) -> u64 {
+        match self {
+            Delays::ThirtySeconds => 30000,
+            Delays::OneMinute => 60000,
+            Delays::TwoMinutes => 120000,
+            Delays::FiveMinutes => 300000,
+            Delays::Custom => 0,
+        }
+    }
+
+    /// Converts a delay to Rust's Duration
+    pub fn as_duration(&self) -> Duration {
+        Duration::from_millis(self.as_millis())
+    }
 }
 
 pub enum Distances {
@@ -84,29 +100,29 @@ impl Controller {
 
     pub fn run(controller: Arc<Mutex<Self>>) {
         thread::Builder::new().name("mover_thread".to_string()).spawn(move || {
-            let interval = controller.lock().unwrap().get_interval() as u64;
-            sleep(Duration::from_millis(interval)); // Wait for the first interval, don't move windows immediately
+            let interval = controller.lock().unwrap().get_interval();
+            sleep(interval); // Wait for the first interval, don't move windows immediately
 
             loop {
                 let controller = controller.lock().unwrap();
                 let running = controller.is_running();
-                let interval = controller.get_interval() as u64;
+                let interval = controller.get_interval();
                 drop(controller);
 
                 if running {
                     mover::run();
                 }
 
-                sleep(Duration::from_millis(interval));
+                sleep(interval);
             }
         }).expect("Thread failed to start");
     }
 
-    pub fn get_interval(&self) -> i32 {
+    pub fn get_interval(&self) -> Duration {
         return self.settings_manager.get_delay();
     }
 
-    pub fn set_interval(&mut self, interval: i32) {
+    pub fn set_interval(&mut self, interval: Duration) {
         self.settings_manager.set_delay(interval);
     }
 

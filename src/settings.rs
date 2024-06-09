@@ -1,6 +1,7 @@
 use std::fs::{File, write};
 use std::io::Read;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use crate::controller::Delays;
 
@@ -13,10 +14,10 @@ pub struct Settings {
 }
 
 /// Lowest delay allowed, in milliseconds (1 second)
-pub const LOWEST_DELAY: i32 = 1000;
+pub const LOWEST_DELAY: Duration = Duration::from_secs(1);
 
 /// Highest delay allowed, in milliseconds (30 minutes)
-pub const MAX_DELAY: i32 = 1800000;
+pub const MAX_DELAY: Duration = Duration::from_secs(30 * 60);
 
 /// Lowest max distance allowed, in pixels
 pub const LOWEST_MAX_DISTANCE: i32 = 1;
@@ -40,24 +41,14 @@ impl Settings {
         self.running = running;
     }
 
-    /// Returns the delay in milliseconds
-    pub fn get_delay(&self) -> i32 {
-        return self.delay_milliseconds;
+    /// Returns the delay
+    pub fn get_delay(&self) -> Duration {
+        return Duration::from_millis(self.delay_milliseconds as u64);
     }
 
     /// Sets the delay, in milliseconds
-    pub fn set_delay(&mut self, delay: i32) {
-        self.delay_milliseconds = delay;
-    }
-
-    /// Returns the delay in seconds
-    pub fn get_delay_seconds(&self) -> i32 {
-        return self.delay_milliseconds / 1000;
-    }
-
-    /// Sets the delay, in seconds
-    pub fn set_delay_seconds(&mut self, delay: i32) {
-        self.delay_milliseconds = delay * 1000;
+    pub fn set_delay(&mut self, delay: Duration) {
+        self.delay_milliseconds = delay.as_millis() as i32;
     }
 
     pub fn get_max_distance(&self) -> (i32, i32) {
@@ -111,16 +102,16 @@ impl SettingsManager {
                 let mut errors: Vec<String> = Vec::new();
 
                 // Validate the settings and update them if necessary since the user could have edited the settings file
-                if settings.delay_milliseconds < LOWEST_DELAY {
-                    settings.delay_milliseconds = LOWEST_DELAY;
+                if settings.delay_milliseconds < LOWEST_DELAY.as_millis() as i32 {
+                    settings.delay_milliseconds = LOWEST_DELAY.as_millis() as i32;
                     errors.push(
-                        format!("The delay was too low, it has been set to the lowest possible value of {} second.", LOWEST_DELAY / 1000)
+                        format!("The delay was too low, it has been set to the lowest possible value of {} second.", LOWEST_DELAY.as_millis() as i32 / 1000)
                     );
                 }
-                if settings.delay_milliseconds > MAX_DELAY {
-                    settings.delay_milliseconds = MAX_DELAY;
+                if settings.delay_milliseconds > MAX_DELAY.as_millis() as i32 {
+                    settings.delay_milliseconds = MAX_DELAY.as_millis() as i32;
                     errors.push(
-                        format!("The delay was too high, it has been set to the highest possible value of {} seconds.", MAX_DELAY / 1000)
+                        format!("The delay was too high, it has been set to the highest possible value of {} seconds.", MAX_DELAY.as_millis() as i32 / 1000)
                     );
                 }
 
@@ -179,13 +170,13 @@ impl SettingsManager {
 
     pub fn is_running(&self) -> bool {
         let settings = self.settings.lock().unwrap();
-        return settings.running;
+        return settings.get_running();
     }
 
     /// Sets the running state, and saves the settings to the settings file
     pub fn set_running(&self, running: bool) {
         let mut settings = self.settings.lock().unwrap();
-        settings.running = running;
+        settings.set_running(running);
         SettingsManager::save_settings(&*settings);
     }
 
@@ -196,27 +187,15 @@ impl SettingsManager {
         SettingsManager::save_settings(&*settings);
     }
 
-    pub fn get_delay(&self) -> i32 {
+    pub fn get_delay(&self) -> Duration {
         let settings = self.settings.lock().unwrap();
-        return settings.delay_milliseconds;
+        return settings.get_delay();
     }
 
     /// Sets the delay, in milliseconds, and saves the settings to the settings file
-    pub fn set_delay(&self, delay: i32) {
+    pub fn set_delay(&self, duration: Duration) {
         let mut settings = self.settings.lock().unwrap();
-        settings.delay_milliseconds = delay;
-        SettingsManager::save_settings(&*settings);
-    }
-
-    pub fn get_delay_seconds(&self) -> i32 {
-        let settings = self.settings.lock().unwrap();
-        return settings.get_delay_seconds();
-    }
-
-    /// Sets the delay, in seconds, and saves the settings to the settings file
-    pub fn set_delay_seconds(&self, delay: i32) {
-        let mut settings = self.settings.lock().unwrap();
-        settings.set_delay_seconds(delay);
+        settings.set_delay(duration);
         SettingsManager::save_settings(&*settings);
     }
 
