@@ -1,10 +1,11 @@
 use std::{thread, cell::RefCell};
+use std::time::Duration;
 use nwg::{ControlHandle, NativeUi, NumberSelectData};
 use crate::settings::{LOWEST_DELAY, MAX_DELAY};
 
 pub enum DelayDialogData {
     Cancel,
-    Value(i32),
+    Value(Duration),
 }
 
 #[derive(Default)]
@@ -22,16 +23,16 @@ impl DelayDialog {
 
     /// Create the dialog UI on a new thread. The dialog result will be returned by the thread handle.
     /// To alert the main GUI that the dialog completed, this function takes a notice sender object.
-    pub(crate) fn popup(sender: nwg::NoticeSender, current_value: i32) -> thread::JoinHandle<DelayDialogData> {
+    pub(crate) fn popup(sender: nwg::NoticeSender, current: Duration) -> thread::JoinHandle<DelayDialogData> {
         return thread::spawn(move || {
             // Create the UI just like in the main function
             let app = DelayDialog::build_ui(Default::default()).expect("Failed to build UI");
 
             let number_select_data = NumberSelectData::Int {
-                value: (current_value / 1000) as i64,
-                step: 1,                         // 1 second steps
-                max: MAX_DELAY as i64 / 1000,    // 30 minutes
-                min: LOWEST_DELAY as i64 / 1000, // 1 second
+                value: current.as_secs() as i64,
+                step: 1, // 1 second steps
+                max: MAX_DELAY.as_secs() as i64,
+                min: LOWEST_DELAY.as_secs() as i64,
             };
             app.number_select.set_data(number_select_data);
 
@@ -49,8 +50,8 @@ impl DelayDialog {
         let mut data = self.data.borrow_mut();
         if btn == &self.ok_button {
             let value = self.number_select.data();
-            if let Ok(parsed_value) = value.formatted_value().parse::<i32>() {
-                *data = Some(DelayDialogData::Value(parsed_value.abs() * 1000));
+            if let Ok(parsed_value) = value.formatted_value().parse::<u64>() {
+                *data = Some(DelayDialogData::Value(Duration::from_secs(parsed_value)));
             } else {
                 // TODO: Handle the error, if any
                 println!("Failed to parse value!");

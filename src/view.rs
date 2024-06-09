@@ -1,5 +1,6 @@
 use std::{thread, cell::RefCell};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use crate::controller::{Controller, Delays, Distances};
 use crate::delay_dialog::{DelayDialogData, DelayDialog};
 use crate::distance_dialog::{DistanceDialog, DistanceDialogData};
@@ -64,10 +65,10 @@ impl SystemTray {
 
     fn do_delay(&self, delay: Delays) {
         match delay {
-            Delays::ThirtySeconds => self.controller.lock().unwrap().set_interval(Delays::ThirtySeconds as i32),
-            Delays::OneMinute => self.controller.lock().unwrap().set_interval(Delays::OneMinute as i32),
-            Delays::TwoMinutes => self.controller.lock().unwrap().set_interval(Delays::TwoMinutes as i32),
-            Delays::FiveMinutes => self.controller.lock().unwrap().set_interval(Delays::FiveMinutes as i32),
+            Delays::ThirtySeconds => self.controller.lock().unwrap().set_interval(Delays::ThirtySeconds.as_duration()),
+            Delays::OneMinute => self.controller.lock().unwrap().set_interval(Delays::OneMinute.as_duration()),
+            Delays::TwoMinutes => self.controller.lock().unwrap().set_interval(Delays::TwoMinutes.as_duration()),
+            Delays::FiveMinutes => self.controller.lock().unwrap().set_interval(Delays::FiveMinutes.as_duration()),
             Delays::Custom => {
                 self.delay_custom();
                 return; // Don't update the menu or tooltip, will be done when the dialog closes in the callback
@@ -121,6 +122,7 @@ impl SystemTray {
             .for_each(|x| x.set_checked(false));
 
         let interval = self.controller.lock().unwrap().get_interval();
+        let interval = interval.as_millis() as i32;
         match Delays::from_millis(interval) {
             Delays::ThirtySeconds => self.delay_30_menu.set_checked(true),
             Delays::OneMinute => self.delay_1_menu.set_checked(true),
@@ -162,7 +164,9 @@ impl SystemTray {
     }
 
     /// Formats an interval in milliseconds into a human readable string
-    fn format_interval(&self, interval: i32) -> String {
+    fn format_interval(&self, duration: Duration) -> String {
+        let interval = duration.as_millis() as i32;
+
         match Delays::from_millis(interval) {
             Delays::ThirtySeconds => return "30 seconds".to_string(),
             Delays::OneMinute => return "1 minute".to_string(),
