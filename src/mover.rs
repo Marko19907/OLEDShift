@@ -1,40 +1,34 @@
 use std::{
     mem,
-    ptr,
     os::raw::c_int,
-    time::{SystemTime, UNIX_EPOCH}
+    ptr,
 };
 use std::collections::HashSet;
 use std::ffi::OsString;
 use std::os::windows::ffi::OsStringExt;
 use std::sync::Once;
+
 use lazy_static::lazy_static;
 use libloading::Library;
 use rand::Rng;
 use winapi::{
+    shared::minwindef::{BOOL, LPARAM, LPVOID, TRUE, UINT},
+    shared::windef::{HDC, HMONITOR, HWND, RECT},
     um::shellapi::{ABM_GETSTATE, ABS_AUTOHIDE, APPBARDATA, SHAppBarMessage},
-    shared::minwindef::{BOOL, DWORD, LPARAM, TRUE, UINT, LPVOID},
-    shared::basetsd::UINT_PTR,
-    shared::windef::{RECT, HDC, HMONITOR, HWND},
     um::winuser::{
-        EnumDisplayMonitors,
-        EnumWindows,
-        DispatchMessageW,
         AnimateWindow,
         AW_CENTER,
-        GetMessageW,
+        EnumDisplayMonitors,
+        EnumWindows,
+        GetClassNameW,
         GetMonitorInfoW,
         GetSystemMetrics,
         GetWindowPlacement,
         HWND_TOP,
         IsWindowVisible,
-        KillTimer,
-        MONITORINFOEXW,
-        MONITOR_DEFAULTTONEAREST,
         MonitorFromWindow,
         MONITORINFO,
-        MSG,
-        SetTimer,
+        MONITORINFOEXW,
         SetWindowPos,
         SM_CYSCREEN,
         SPI_GETWORKAREA,
@@ -42,13 +36,11 @@ use winapi::{
         SWP_NOSIZE,
         SWP_NOZORDER,
         SystemParametersInfoW,
-        TranslateMessage,
-        WINDOWPLACEMENT
+        WINDOWPLACEMENT,
     },
 };
-use winapi::um::winuser::GetClassNameW;
-use crate::controller::{MAX_MOVE};
 
+use crate::controller::MAX_MOVE;
 
 lazy_static! {
     /// A set of window classes that should be excluded from being moved.
@@ -73,12 +65,12 @@ fn is_taskbar_auto_hidden() -> bool {
 }
 
 fn get_taskbar_height() -> i32 {
+    let mut work_area_rect: RECT = unsafe { mem::zeroed() };
     unsafe {
-        let mut work_area_rect: RECT = mem::zeroed();
         SystemParametersInfoW(SPI_GETWORKAREA, 0, &mut work_area_rect as *mut _ as LPVOID, 0);
-        let screen_height = GetSystemMetrics(SM_CYSCREEN);
-        return screen_height - (work_area_rect.bottom - work_area_rect.top);
     }
+    let screen_height = unsafe { GetSystemMetrics(SM_CYSCREEN) };
+    return screen_height - (work_area_rect.bottom - work_area_rect.top);
 }
 
 fn is_window_snapped(hwnd: HWND) -> bool {
@@ -136,8 +128,8 @@ unsafe extern "system" fn enum_display_monitors_callback(
 }
 
 /// Returns true if the window is visible.
-unsafe fn is_window_visible(hwnd: HWND) -> bool {
-    return IsWindowVisible(hwnd) != 0;
+fn is_window_visible(hwnd: HWND) -> bool {
+    return unsafe { IsWindowVisible(hwnd) != 0 };
 }
 
 /// Returns true if the window is maximized.
@@ -155,22 +147,23 @@ fn is_excluded(hwnd: HWND) -> bool {
     return CLASS_EXCLUSIONS.contains(class_name.to_str().unwrap_or(""));
 }
 
-unsafe extern "system" fn enum_windows_proc(hwnd: HWND, _: LPARAM) -> BOOL {
+fn move_window(hwnd: HWND) {
     if !is_window_visible(hwnd) {
-        return TRUE;
+        return;
     }
-    let mut wp: WINDOWPLACEMENT = mem::zeroed();
+
+    let mut wp: WINDOWPLACEMENT = unsafe { mem::zeroed() };
     wp.length = mem::size_of::<WINDOWPLACEMENT>() as UINT;
-    GetWindowPlacement(hwnd, &mut wp);
+    unsafe { GetWindowPlacement(hwnd, &mut wp) };
 
     if is_window_maximized(&wp) || is_window_snapped(hwnd) || is_excluded(hwnd) {
-        return TRUE;
+        return;
     }
 
-    let h_monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-    let mut monitor_info: MONITORINFO = mem::zeroed();
+    let h_monitor = unsafe { MonitorFromWindow(hwnd, winapi::um::winuser::MONITOR_DEFAULTTONEAREST) };
+    let mut monitor_info: MONITORINFO = unsafe { mem::zeroed() };
     monitor_info.cbSize = mem::size_of::<MONITORINFO>() as UINT;
-    GetMonitorInfoW(h_monitor, &mut monitor_info);
+    unsafe { GetMonitorInfoW(h_monitor, &mut monitor_info) };
 
     let screen_width = monitor_info.rcMonitor.right - monitor_info.rcMonitor.left;
     let screen_height = monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top;
@@ -179,7 +172,7 @@ unsafe extern "system" fn enum_windows_proc(hwnd: HWND, _: LPARAM) -> BOOL {
 
     // Check if the window is smaller than the screen, might not be true if the window is a game
     if !(window_width <= screen_width && window_height <= screen_height) {
-        return TRUE;
+        return;
     }
 
     let (max_x, max_y) = MAX_MOVE.lock().map(|guard| *guard).unwrap_or((50, 50));
@@ -202,59 +195,23 @@ unsafe extern "system" fn enum_windows_proc(hwnd: HWND, _: LPARAM) -> BOOL {
         random_y = i32::min(random_y, monitor_info.rcMonitor.bottom - window_height - taskbar_height);
     }
 
-    SetWindowPos(hwnd, HWND_TOP, random_x, random_y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+    unsafe { SetWindowPos(hwnd, HWND_TOP, random_x, random_y, 0, 0, SWP_NOSIZE | SWP_NOZORDER) };
 
-    if AnimateWindow(hwnd, 4000, AW_CENTER) == 0 {
+    if unsafe { AnimateWindow(hwnd, 4000, AW_CENTER) } == 0 {
         // Failed to animate window movement
     }
 
-    return TRUE;
-}
-
-unsafe extern "system" fn timer_proc(_: HWND, _: UINT, _: UINT_PTR, _: DWORD) {
-    EnumWindows(Some(enum_windows_proc), 0);
-}
-
-/// Moves the windows just once.
-pub fn run() {
-    unsafe {
-        EnumWindows(Some(enum_windows_proc), 0);
-    }
     return;
 }
 
-/// Leftover code from the proof of concept command line version, not used in the GUI version.
-pub fn main() {
+unsafe extern "system" fn enum_windows_proc(hwnd: HWND, _: LPARAM) -> BOOL {
+    move_window(hwnd);
+    return TRUE;
+}
+
+/// Moves the windows just once.
+pub fn move_all_windows() {
     unsafe {
-        let _seed = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
-        let _rng = rand::thread_rng();
-
-        let mut interval = String::new();
-        println!("Enter the interval in milliseconds: ");
-        std::io::stdin().read_line(&mut interval).unwrap();
-
-        let mut interval = interval.trim().parse::<i32>().unwrap_or_else(|_| 0);
-        while interval <= 0 {
-            println!("Bad entry. Enter a positive number: ");
-            let mut new_interval = String::new();
-            std::io::stdin().read_line(&mut new_interval).unwrap();
-            interval = new_interval.trim().parse::<i32>().unwrap_or_else(|_| 0);
-        }
-
         EnumWindows(Some(enum_windows_proc), 0);
-
-        let timer_id = SetTimer(ptr::null_mut(), 0, interval as u32, Some(timer_proc));
-        if timer_id == 0 {
-            println!("Failed to set timer!");
-            return;
-        }
-
-        let mut msg: MSG = mem::zeroed();
-        while GetMessageW(&mut msg, ptr::null_mut(), 0, 0) != 0 {
-            TranslateMessage(&msg);
-            DispatchMessageW(&msg);
-        }
-
-        KillTimer(ptr::null_mut(), timer_id);
     }
 }

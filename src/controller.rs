@@ -110,7 +110,7 @@ impl Controller {
                 drop(controller);
 
                 if running {
-                    mover::run();
+                    mover::move_all_windows();
                 }
 
                 sleep(interval);
