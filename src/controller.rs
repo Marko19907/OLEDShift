@@ -113,7 +113,8 @@ impl Controller {
 
                 let mut running = lock.lock().unwrap();
                 *running = false;
-                let (_, timeout_result) = cvar.wait_timeout(running, interval).unwrap();
+                let (new_running, timeout_result) = cvar.wait_timeout(running, interval).unwrap();
+                running = new_running;
 
                 if timeout_result.timed_out() {
                     let controller = controller.lock().unwrap();
