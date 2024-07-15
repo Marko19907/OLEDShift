@@ -1,10 +1,11 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
-use std::thread::sleep;
 use std::time::Duration;
+
 use lazy_static::lazy_static;
-use crate::settings::SettingsManager;
+
 use crate::mover;
+use crate::settings::SettingsManager;
 
 /// The delays that can be selected from the tray menu, in milliseconds
 pub enum Delays {
@@ -74,12 +75,14 @@ lazy_static! {
 
 pub(crate) struct Controller {
     settings_manager: SettingsManager,
+    condvar: Arc<(Mutex<bool>, Condvar)>
 }
 
 impl Default for Controller {
     fn default() -> Self {
         let controller = Controller {
             settings_manager: SettingsManager::default(),
+            condvar: Arc::new((Mutex::new(false), Condvar::new())),
         };
         controller.update_max_move();
         return controller;
@@ -99,21 +102,25 @@ impl Controller {
     }
 
     pub fn run(controller: Arc<Mutex<Self>>) {
+        let condvar = controller.lock().unwrap().condvar.clone();
         thread::Builder::new().name("mover_thread".to_string()).spawn(move || {
-            let interval = controller.lock().unwrap().get_interval();
-            sleep(interval); // Wait for the first interval, don't move windows immediately
-
+            let (lock, cvar) = &*condvar;
             loop {
-                let controller = controller.lock().unwrap();
-                let running = controller.is_running();
-                let interval = controller.get_interval();
-                drop(controller);
+                let interval = {
+                    let controller = controller.lock().unwrap();
+                    controller.get_interval()
+                };
 
-                if running {
-                    mover::move_all_windows();
+                let mut running = lock.lock().unwrap();
+                *running = false;
+                let (_, timeout_result) = cvar.wait_timeout(running, interval).unwrap();
+
+                if timeout_result.timed_out() {
+                    let controller = controller.lock().unwrap();
+                    if controller.is_running() {
+                        mover::move_all_windows();
+                    }
                 }
-
-                sleep(interval);
             }
         }).expect("Thread failed to start");
     }
@@ -124,6 +131,10 @@ impl Controller {
 
     pub fn set_interval(&mut self, interval: Duration) {
         self.settings_manager.set_delay(interval);
+        let (lock, cvar) = &*self.condvar;
+        let mut running = lock.lock().unwrap();
+        *running = true;
+        cvar.notify_all();
     }
 
     pub fn is_running(&self) -> bool {
@@ -132,6 +143,10 @@ impl Controller {
 
     pub fn toggle_running(&mut self) {
         self.settings_manager.toggle_running();
+        let (lock, cvar) = &*self.condvar;
+        let mut running = lock.lock().unwrap();
+        *running = true;
+        cvar.notify_all();
     }
 
     pub fn get_max_move(&self) -> (i32, i32) {
