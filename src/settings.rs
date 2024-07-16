@@ -139,7 +139,9 @@ impl SettingsManager {
 
                     return Err((
                         errors.join("\n"),
-                        SettingsManager::default(),
+                        SettingsManager {
+                            settings: Arc::new(Mutex::new(settings)),
+                        }
                     ));
                 }
 
