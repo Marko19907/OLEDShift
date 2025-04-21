@@ -77,7 +77,7 @@ lazy_static! {
     pub static ref ENABLED_MONITORS: Mutex<HashMap<String, bool>> = Mutex::new(HashMap::new());
 }
 
-pub(crate) struct Controller {
+pub struct Controller {
     settings_manager: SettingsManager,
     condvar: Arc<(Mutex<bool>, Condvar)>
 }
