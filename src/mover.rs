@@ -162,7 +162,7 @@ fn is_monitor_included(h_monitor: &HMONITOR) -> bool {
                 return true; // If the monitor is not in the settings file, we should move the window.
             }
 
-            return enabled.get(&device_id).unwrap_or(&false).clone();
+            return *enabled.get(&device_id).unwrap_or(&false);
         }
     }
 
