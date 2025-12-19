@@ -40,7 +40,9 @@ use winapi::{
     },
 };
 
-use crate::controller::MAX_MOVE;
+use crate::controller::{ENABLED_MONITORS, MAX_MOVE};
+use crate::monitor_info::{get_display_device_info, get_monitor_info_ex, monitor_device_name};
+
 
 lazy_static! {
     /// A set of window classes that should be excluded from being moved.
@@ -147,6 +149,27 @@ fn is_excluded(hwnd: HWND) -> bool {
     return CLASS_EXCLUSIONS.contains(class_name.to_str().unwrap_or(""));
 }
 
+/// Returns true if we should move the window based on the monitor it's on.
+/// The window should be moved if it's not in the settings file, or if it's in the settings file and enabled.
+fn is_monitor_included(h_monitor: &HMONITOR) -> bool {
+    if let Some(mon_info_ex) = get_monitor_info_ex(*h_monitor) {
+        let raw_name = monitor_device_name(&mon_info_ex);
+
+        if let Some((_, device_id)) = get_display_device_info(&raw_name) {
+            let enabled = ENABLED_MONITORS.lock().unwrap();
+
+            if !enabled.contains_key(&device_id) {
+                return true; // If the monitor is not in the settings file, we should move the window.
+            }
+
+            return *enabled.get(&device_id).unwrap_or(&false);
+        }
+    }
+
+    return false;
+}
+
+
 fn move_window(hwnd: HWND) {
     if !is_window_visible(hwnd) {
         return;
@@ -161,6 +184,11 @@ fn move_window(hwnd: HWND) {
     }
 
     let h_monitor = unsafe { MonitorFromWindow(hwnd, winapi::um::winuser::MONITOR_DEFAULTTONEAREST) };
+
+    if !is_monitor_included(&h_monitor) {
+        return;
+    }
+
     let mut monitor_info: MONITORINFO = unsafe { mem::zeroed() };
     monitor_info.cbSize = mem::size_of::<MONITORINFO>() as UINT;
     unsafe { GetMonitorInfoW(h_monitor, &mut monitor_info) };

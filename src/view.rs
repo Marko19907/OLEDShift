@@ -1,9 +1,10 @@
-use std::{thread, cell::RefCell};
+use crate::controller::{Controller, Delays, Distances};
+use crate::delay_dialog::{DelayDialog, DelayDialogData};
+use crate::distance_dialog::{DistanceDialog, DistanceDialogData};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use crate::controller::{Controller, Delays, Distances};
-use crate::delay_dialog::{DelayDialogData, DelayDialog};
-use crate::distance_dialog::{DistanceDialog, DistanceDialogData};
+use std::{cell::RefCell, thread};
 
 pub static ICON: &[u8] = include_bytes!("../icon.ico");
 
@@ -25,6 +26,8 @@ pub struct SystemTray {
     distance_medium_menu: nwg::MenuItem,
     distance_large_menu: nwg::MenuItem,
     distance_custom_menu: nwg::MenuItem,
+    screen_menu: nwg::Menu,
+    screens_map: RefCell<HashMap<String, nwg::MenuItem>>,
     exit_menu: nwg::MenuItem,
     separator_delay: nwg::MenuSeparator,
     separator_distance: nwg::MenuSeparator,
@@ -241,6 +244,19 @@ impl SystemTray {
         }
     }
 
+    pub fn handle_monitor_selected(&self, device_id: &str) {
+        let mut controller = self.controller.lock().unwrap();
+
+        let binding = controller.get_all_monitors();
+        let enabled = binding.get(device_id).unwrap_or_else(|| {
+            // If the monitor is not in the settings file, add it
+            controller.add_monitor(device_id);
+            return &true;
+        });
+
+        controller.set_monitor_state(device_id, !enabled);
+    }
+
     fn exit(&self) {
         nwg::stop_thread_dispatch();
     }
@@ -251,17 +267,67 @@ impl SystemTray {
 // ALL of this stuff is handled by native-windows-derive
 //
 mod system_tray_ui {
-    use native_windows_gui as nwg;
-    use std::rc::Rc;
-    use std::cell::RefCell;
-    use std::ops::Deref;
     use crate::controller::{Controller, Delays, Distances};
     use crate::settings::SettingsManager;
-    use crate::view::{ICON, SystemTray};
+    use crate::view::{SystemTray, ICON};
+    use native_windows_gui as nwg;
+    use std::cell::RefCell;
+    use std::ops::Deref;
+    use std::rc::Rc;
 
     pub struct SystemTrayUi {
         inner: Rc<SystemTray>,
         default_handler: RefCell<Vec<nwg::EventHandler>>,
+    }
+
+    /// Refresh the "Screens" submenu based on the merged monitor info.
+    pub fn update_screens_submenu(system_tray: &SystemTray) {
+        let merged = {
+            let controller = system_tray.controller.lock().unwrap();
+            controller.get_monitors_merged()
+        };
+
+        let mut screens_map = system_tray.screens_map.borrow_mut();
+
+        for (device_id, (friendly_name, is_enabled, is_connected)) in merged.iter() {
+            let menu_item = screens_map.entry(device_id.clone())
+                .or_insert_with(|| {
+                    let text = format!("Monitor - {} ({})", friendly_name, device_id);
+                    let mut item = nwg::MenuItem::default();
+                    nwg::MenuItem::builder()
+                        .text(&text)
+                        .check(*is_enabled)
+                        .disabled(!*is_connected)
+                        .parent(&system_tray.screen_menu)
+                        .build(&mut item)
+                        .expect("Failed to build screen menu item");
+                    item
+                });
+
+            menu_item.set_checked(*is_enabled);
+            menu_item.set_enabled(*is_connected);
+        }
+
+
+        // For some reason NWG isn't updating the check state of the menu items, this is a workaround
+        {
+            // First, check all the items
+            for (_, menu_item) in screens_map.iter_mut() {
+                menu_item.set_checked(true);
+            }
+
+            // Then, sync the check state with the controller. This seems to work around the issue for some reason.
+            let known_screens = {
+                let controller = system_tray.controller.lock().unwrap();
+                controller.get_all_monitors()
+            };
+
+            for (device_id, enabled) in known_screens.iter() {
+                if let Some(menu_item) = screens_map.get_mut(device_id) {
+                    menu_item.set_checked(*enabled);
+                }
+            }
+        }
     }
 
     impl nwg::NativeUi<SystemTrayUi> for SystemTray {
@@ -357,6 +423,11 @@ mod system_tray_ui {
                 .parent(&data.distance_menu)
                 .build(&mut data.distance_custom_menu)?;
 
+            nwg::Menu::builder()
+                .text("Screens")
+                .parent(&data.tray_menu)
+                .build(&mut data.screen_menu)?;
+
             nwg::MenuSeparator::builder()
                 .parent(&data.tray_menu)
                 .build(&mut data.separator_delay)?;
@@ -395,6 +466,7 @@ mod system_tray_ui {
             ui.inner.update_distance_menu();
             ui.inner.update_toggle();
             ui.inner.update_tooltip();
+            update_screens_submenu(&ui.inner);
 
             SystemTray::show_start_message(&ui.inner);
 
@@ -414,7 +486,13 @@ mod system_tray_ui {
                             if &handle == &evt_ui.tray {
                                 SystemTray::show_menu(&evt_ui);
                             }
-                        E::OnMenuItemSelected =>
+                        E::OnMenuHover => {
+                            if &handle == &evt_ui.screen_menu {
+                                // TODO: Maybe we can listen for monitor changes instead of updating everything on hover?
+                                update_screens_submenu(&*evt_ui);
+                            }
+                        },
+                        E::OnMenuItemSelected => {
                             if &handle == &evt_ui.enabled_toggle {
                                 SystemTray::toggle_enabled(&evt_ui);
                             }
@@ -447,7 +525,19 @@ mod system_tray_ui {
                             }
                             else if &handle == &evt_ui.exit_menu {
                                 SystemTray::exit(&evt_ui);
-                            },
+                            }
+                            else {
+                                // Handle dynamically created screen menu items
+
+                                // Iterate through the screens_items to find a matching handle
+                                if let Some((device_id, _menu_item)) = evt_ui.screens_map.borrow().iter()
+                                    .find_map(|(device_id, menu_item)| {
+                                        if &handle == &menu_item.handle { Some((device_id.clone(), menu_item)) } else { None }
+                                    }) {
+                                    SystemTray::handle_monitor_selected(&evt_ui, &device_id);
+                                }
+                            }
+                        },
                         _ => {}
                     }
                 }

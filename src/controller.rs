@@ -1,11 +1,12 @@
+use std::collections::HashMap;
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use lazy_static::lazy_static;
-
+use crate::monitor_info::{get_all_monitors_info, get_display_device_info, monitor_device_name};
 use crate::mover;
 use crate::settings::SettingsManager;
+use lazy_static::lazy_static;
 
 /// The delays that can be selected from the tray menu, in milliseconds
 pub enum Delays {
@@ -71,6 +72,9 @@ lazy_static! {
     // This is a global variable that can be accessed from anywhere in the program
     // It wasn't possible to pass the max move to the mover function since it's used in a C style callback, so this is the next best thing
     pub static ref MAX_MOVE: Mutex<(i32, i32)> = Mutex::new((50, 50));
+
+    // Same as above, but for the enabled monitors
+    pub static ref ENABLED_MONITORS: Mutex<HashMap<String, bool>> = Mutex::new(HashMap::new());
 }
 
 pub(crate) struct Controller {
@@ -98,6 +102,9 @@ impl Controller {
     pub fn set_settings(controller: Arc<Mutex<Self>>, settings: SettingsManager) {
         let mut controller = controller.lock().unwrap();
         controller.settings_manager = settings;
+
+        // Sync the controller state with the settings file
+        *ENABLED_MONITORS.lock().unwrap() = controller.get_all_monitors();
         controller.update_max_move();
     }
 
@@ -162,5 +169,57 @@ impl Controller {
     /// Updates the max move from the settings file, to be used on startup
     fn update_max_move(&self) {
         *MAX_MOVE.lock().unwrap() = self.settings_manager.get_max_distance();
+    }
+
+    /// Returns all the monitors in the format: device_id => (friendly_name, is_enabled, is_connected)
+    pub fn get_monitors_merged(&self) -> HashMap<String, (String, bool, bool)> {
+        let connected = self.get_connected_monitors();
+        let known = self.get_all_monitors();
+
+        let mut merged = HashMap::new();
+
+        for (device_id, friendly_name) in connected {
+            // If device_id is absent in known, default is_enabled to true
+            let is_enabled = known.get(&device_id).cloned().unwrap_or(true);
+            merged.insert(device_id, (friendly_name, is_enabled, true));
+        }
+
+        for (device_id, is_enabled) in known {
+            if !merged.contains_key(&device_id) {
+                merged.insert(device_id.clone(), ("(Offline)".to_string(), is_enabled, false));
+            }
+        }
+
+        return merged;
+    }
+
+
+    /// Returns the currently connected monitors in the format (device_id, friendly name)
+    pub fn get_connected_monitors(&self) -> HashMap<String, String> {
+        let monitors_info = get_all_monitors_info();
+
+        return monitors_info.iter().filter_map(|monitor_info| {
+            let device_name = monitor_device_name(monitor_info);
+
+            return get_display_device_info(&device_name).map(|(friendly_name, device_id)| {
+                (device_id, friendly_name)
+            });
+        })
+            .collect::<HashMap<String, String>>();
+    }
+
+    pub fn get_all_monitors(&self) -> HashMap<String, bool> {
+        return self.settings_manager.get_all_monitors();
+    }
+
+    /// Sets the monitor state in the settings file
+    pub fn set_monitor_state(&mut self, monitor: &str, enabled: bool) {
+        self.settings_manager.set_monitor_state(monitor, enabled);
+        *ENABLED_MONITORS.lock().unwrap() = self.get_all_monitors();
+    }
+
+    /// Adds a monitor to the app
+    pub fn add_monitor(&mut self, monitor: &str) {
+        self.settings_manager.set_monitor_state(monitor, true);
     }
 }

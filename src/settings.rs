@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use std::fs::{File, write};
 use std::io::Read;
 use std::sync::{Arc, Mutex};
@@ -11,6 +12,8 @@ pub struct Settings {
     delay_milliseconds: i32,
     max_distance_x: i32,
     max_distance_y: i32,
+    #[serde(default)] // If the field is missing, default to an empty HashMap. TODO: Maybe introduce a version field to handle future changes?
+    enabled_monitors: HashMap<String, bool>,
 }
 
 /// Lowest delay allowed, in milliseconds (1 second)
@@ -30,6 +33,7 @@ impl Settings {
             delay_milliseconds: Delays::ThirtySeconds as i32,
             max_distance_x: 50,
             max_distance_y: 50,
+            enabled_monitors: HashMap::new(),
         };
     }
 
@@ -58,6 +62,14 @@ impl Settings {
     pub fn set_max_distance(&mut self, max_distance_x: i32, max_distance_y: i32) {
         self.max_distance_x = max_distance_x;
         self.max_distance_y = max_distance_y;
+    }
+
+    pub fn get_all_monitors(&self) -> HashMap<String, bool> {
+        return self.enabled_monitors.clone();
+    }
+
+    pub fn set_monitor_state(&mut self, monitor: &str, enabled: bool) {
+        self.enabled_monitors.insert(monitor.to_string(), enabled);
     }
 }
 
@@ -210,6 +222,27 @@ impl SettingsManager {
     pub fn set_max_distance(&self, max_distance_x: i32, max_distance_y: i32) {
         let mut settings = self.settings.lock().unwrap();
         settings.set_max_distance(max_distance_x, max_distance_y);
+        SettingsManager::save_settings(&*settings);
+    }
+
+    /// Returns all the monitors in the settings file
+    pub fn get_all_monitors(&self) -> HashMap<String, bool> {
+        let settings = self.settings.lock().unwrap();
+        return settings.get_all_monitors();
+    }
+
+    /// Returns only the enabled monitors
+    pub fn get_enabled_monitors(&self) -> HashSet<String> {
+        let settings = self.settings.lock().unwrap();
+        return settings.get_all_monitors().iter()
+            .filter(|(_, enabled)| **enabled)
+            .map(|(monitor, _)| monitor.to_string())
+            .collect();
+    }
+
+    pub fn set_monitor_state(&self, monitor: &str, enabled: bool) {
+        let mut settings = self.settings.lock().unwrap();
+        settings.set_monitor_state(monitor, enabled);
         SettingsManager::save_settings(&*settings);
     }
 }
