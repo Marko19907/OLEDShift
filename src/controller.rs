@@ -194,7 +194,7 @@ impl Controller {
     }
 
 
-    /// Returns the currently connected monitors in the format (device name, friendly name)
+    /// Returns the currently connected monitors in the format (device_id, friendly name)
     pub fn get_connected_monitors(&self) -> HashMap<String, String> {
         let monitors_info = get_all_monitors_info();
 

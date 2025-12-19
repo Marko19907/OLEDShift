@@ -86,7 +86,7 @@ pub fn get_display_device_info(device_name: &str) -> Option<(String, String)> {
     }
 }
 
-/// Retrieve a MONITORINFOEXW for the given HMONITOR.
+/// Retrieve the extended monitor information structure (MONITORINFOEXW) for the given HMONITOR.
 pub fn get_monitor_info_ex(h_monitor: HMONITOR) -> Option<MONITORINFOEXW> {
     unsafe {
         let mut mon_info_ex: MONITORINFOEXW = mem::zeroed();
