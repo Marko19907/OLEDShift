@@ -245,14 +245,16 @@ impl SystemTray {
     }
 
     pub fn handle_monitor_selected(&self, device_id: &str) {
-        let binding = self.controller.lock().unwrap().get_all_monitors();
+        let mut controller = self.controller.lock().unwrap();
+
+        let binding = controller.get_all_monitors();
         let enabled = binding.get(device_id).unwrap_or_else(|| {
             // If the monitor is not in the settings file, add it
-            self.controller.lock().unwrap().add_monitor(device_id);
+            controller.add_monitor(device_id);
             return &true;
         });
 
-        self.controller.lock().unwrap().set_monitor_state(device_id, !enabled);
+        controller.set_monitor_state(device_id, !enabled);
     }
 
     fn exit(&self) {
