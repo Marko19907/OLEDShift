@@ -1,9 +1,15 @@
 use std::collections::{HashMap, HashSet};
 use std::fs::{File, write};
 use std::io::Read;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use serde::{Deserialize, Serialize};
+use winapi::{
+    shared::basetsd::UINT32,
+    shared::ntdef::PWSTR,
+    shared::winerror::{APPMODEL_ERROR_NO_PACKAGE, ERROR_INSUFFICIENT_BUFFER, ERROR_SUCCESS}
+};
 use crate::controller::Delays;
 
 #[derive(Serialize, Deserialize)]
@@ -75,7 +81,71 @@ impl Settings {
 
 
 
-const PATH: &str = "settings.json";
+// win-api doesn't have bindings for GetCurrentPackageFamilyName yet, so we define it ourselves
+#[link(name = "kernel32")]
+extern "system" {
+    fn GetCurrentPackageFamilyName(packageFamilyNameLength: *mut UINT32, packageFamilyName: PWSTR) -> i32;
+}
+
+/// Returns Some(PackageFamilyName) if packaged, None if unpackaged.
+fn package_family_name() -> Option<String> {
+    unsafe {
+        let mut len: UINT32 = 0;
+
+        // First probe for required length
+        let rc = GetCurrentPackageFamilyName(&mut len, std::ptr::null_mut());
+        let rc_u = rc as u32;
+
+        if rc_u == APPMODEL_ERROR_NO_PACKAGE {
+            return None;
+        }
+        if rc_u != ERROR_INSUFFICIENT_BUFFER {
+            return None;
+        }
+
+        // Then allocate and fetch the PFN
+        let mut buf: Vec<u16> = vec![0u16; len as usize];
+        let rc2 = GetCurrentPackageFamilyName(&mut len, buf.as_mut_ptr());
+        if (rc2 as u32) != ERROR_SUCCESS {
+            return None;
+        }
+
+        // len includes the NUL terminator, truncate it
+        if len > 0 {
+            buf.truncate((len - 1) as usize);
+        }
+
+        return Some(String::from_utf16_lossy(&buf));
+    }
+}
+
+/// settings.json path:
+/// - packaged: %LOCALAPPDATA%\Packages\<PFN>\LocalState\settings.json (Microsoft Store package)
+/// - unpackaged: next to the exe, great for development and portable use
+fn settings_path() -> PathBuf {
+    if let Some(pfn) = package_family_name() {
+        let mut base = std::env::var_os("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("."));
+
+        base.push("Packages");
+        base.push(pfn);
+        base.push("LocalState");
+
+        // Ensure LocalState exists, create if necessary
+        let _ = std::fs::create_dir_all(&base);
+
+        base.push("settings.json");
+        base
+    } else {
+        std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|dir| dir.join("settings.json")))
+            .unwrap_or_else(|| PathBuf::from("settings.json"))
+    }
+}
+
+
 
 pub struct SettingsManager {
     settings: Arc<Mutex<Settings>>,
@@ -93,16 +163,18 @@ impl SettingsManager {
     pub fn new() -> Result<SettingsManager, (String, SettingsManager)> {
         println!("Loading settings...");
 
-        if !std::path::Path::new(PATH).exists() {
+        let path = settings_path();
+
+        if !path.exists() {
             println!("No settings file found, creating default settings...");
             let settings = Settings::default();
             let serialized = serde_json::to_string_pretty(&settings).unwrap();
-            if let Err(err) = write(PATH, serialized) {
+            if let Err(err) = write(&path, serialized) {
                 eprintln!("Failed to create the default settings file: {}", err);
             }
         }
 
-        let result = File::open(PATH)
+        let result = File::open(&path)
             .and_then(|mut file| {
                 let mut contents = String::new();
                 file.read_to_string(&mut contents)?;
@@ -145,7 +217,7 @@ impl SettingsManager {
 
                     // Update the settings file with the valid settings
                     let serialized = serde_json::to_string_pretty(&settings).expect("Failed to serialize the settings");
-                    if let Err(err) = write(PATH, serialized) {
+                    if let Err(err) = write(&path, serialized) {
                         eprintln!("Failed to update the settings file: {}", err);
                     }
 
@@ -174,8 +246,12 @@ impl SettingsManager {
 
     /// Serializes and saves the settings to the settings file
     fn save_settings(settings: &Settings) {
+        let path = settings_path();
         let serialized = serde_json::to_string_pretty(settings).unwrap();
-        write(PATH, serialized).unwrap();
+
+        if let Err(err) = write(&path, serialized) {
+            eprintln!("Failed to write settings file {:?}: {}", path, err);
+        }
     }
 
     // ---------------------------------------------------------------------------------------------
