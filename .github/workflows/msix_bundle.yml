@@ -1,0 +1,74 @@
+name: Create MSIX Bundle
+
+on:
+  push:
+    tags:
+      - '*' # Trigger on all tags
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        target: [x86_64-pc-windows-msvc, aarch64-pc-windows-msvc]
+
+    steps:
+
+      - name: Checkout 📥
+        uses: actions/checkout@v4
+
+      - name: Setup ARM toolchain 📦
+        if: matrix.target == 'aarch64-pc-windows-msvc'
+        run: rustup target add aarch64-pc-windows-msvc
+
+      - name: Build 🛠
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Upload binaries 📤
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ matrix.target == 'x86_64-pc-windows-msvc' && 'x64' || 'arm64' }}-binaries
+          retention-days: 90
+          path: target/**/release/*.exe
+
+
+  msix_bundle:
+    runs-on: windows-latest
+    needs: build
+
+    steps:
+
+      - name: Checkout 📥
+        uses: actions/checkout@v4
+
+      - name: Download x64 binaries 📥
+        uses: actions/download-artifact@v7
+        with:
+          name: windows-x64-binaries
+          path: ./uwp/x64
+
+      - name: Download ARM64 binaries 📥
+        uses: actions/download-artifact@v7
+        with:
+          name: windows-arm64-binaries
+          path: ./uwp/arm64
+
+      - name: Set up msixbundle-rs 🧰
+        run: |
+          cargo install --git https://github.com/Choochmeque/msixbundle-rs msixbundle-cli
+
+      - name: Create MSIX Bundle 🧩
+        run: |
+          msixbundle-cli `
+            --out-dir ./output `
+            --dir-x64 ./uwp/x64/AppxContent `
+            --dir-arm64 ./uwp/arm64/AppxContent
+
+      - name: Upload MSIX Bundle 📤
+        uses: actions/upload-artifact@v6
+        with:
+          name: msix-bundle
+          retention-days: 90
+          path: ./output
+
