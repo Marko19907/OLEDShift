@@ -1,16 +1,11 @@
 use std::collections::{HashMap, HashSet};
 use std::fs::{File, write};
 use std::io::Read;
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use serde::{Deserialize, Serialize};
-use winapi::{
-    shared::basetsd::UINT32,
-    shared::ntdef::PWSTR,
-    shared::winerror::{APPMODEL_ERROR_NO_PACKAGE, ERROR_INSUFFICIENT_BUFFER, ERROR_SUCCESS}
-};
 use crate::controller::Delays;
+use crate::settings_path::settings_path;
 
 #[derive(Serialize, Deserialize)]
 pub struct Settings {
@@ -76,72 +71,6 @@ impl Settings {
 
     pub fn set_monitor_state(&mut self, monitor: &str, enabled: bool) {
         self.enabled_monitors.insert(monitor.to_string(), enabled);
-    }
-}
-
-
-
-// win-api doesn't have bindings for GetCurrentPackageFamilyName yet, so we define it ourselves
-#[link(name = "kernel32")]
-extern "system" {
-    fn GetCurrentPackageFamilyName(packageFamilyNameLength: *mut UINT32, packageFamilyName: PWSTR) -> i32;
-}
-
-/// Returns Some(PackageFamilyName) if packaged, None if unpackaged.
-fn package_family_name() -> Option<String> {
-    unsafe {
-        let mut len: UINT32 = 0;
-
-        // First probe for required length
-        let rc = GetCurrentPackageFamilyName(&mut len, std::ptr::null_mut());
-        let rc_u = rc as u32;
-
-        if rc_u == APPMODEL_ERROR_NO_PACKAGE {
-            return None;
-        }
-        if rc_u != ERROR_INSUFFICIENT_BUFFER {
-            return None;
-        }
-
-        // Then allocate and fetch the PFN
-        let mut buf: Vec<u16> = vec![0u16; len as usize];
-        let rc2 = GetCurrentPackageFamilyName(&mut len, buf.as_mut_ptr());
-        if (rc2 as u32) != ERROR_SUCCESS {
-            return None;
-        }
-
-        // len includes the NUL terminator, truncate it
-        if len > 0 {
-            buf.truncate((len - 1) as usize);
-        }
-
-        return Some(String::from_utf16_lossy(&buf));
-    }
-}
-
-/// settings.json path:
-/// - packaged: %LOCALAPPDATA%\Packages\<PFN>\LocalState\settings.json (Microsoft Store package)
-/// - unpackaged: next to the exe, great for development and portable use
-fn settings_path() -> PathBuf {
-    if let Some(pfn) = package_family_name() {
-        let mut base = std::env::var_os("LOCALAPPDATA")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("."));
-
-        base.push("Packages");
-        base.push(pfn);
-        base.push("LocalState");
-
-        // Ensure LocalState exists, create if necessary
-        let _ = std::fs::create_dir_all(&base);
-
-        base.push("settings.json");
-        base
-    } else {
-        std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|dir| dir.join("settings.json")))
-            .unwrap_or_else(|| PathBuf::from("settings.json"))
     }
 }
 
