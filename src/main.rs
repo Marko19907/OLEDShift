@@ -17,6 +17,7 @@ mod delay_dialog;
 mod distance_dialog;
 mod settings;
 mod monitor_info;
+mod settings_path;
 
 
 fn main() {

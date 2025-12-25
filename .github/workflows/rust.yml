@@ -2,6 +2,7 @@ name: Rust Cargo build
 
 on:
   push:
+  workflow_call:
   workflow_dispatch:
 
 jobs:
@@ -14,7 +15,7 @@ jobs:
     steps:
 
       - name: Checkout 📥
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup ARM toolchain 📦
         if: matrix.target == 'aarch64-pc-windows-msvc'
@@ -24,7 +25,7 @@ jobs:
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Upload binaries 📤
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: windows-${{ matrix.target == 'x86_64-pc-windows-msvc' && 'x64' || 'arm64' }}-binaries
           retention-days: 90

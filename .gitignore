@@ -1,2 +1,5 @@
 .idea
 /target
+
+/output
+*.exe

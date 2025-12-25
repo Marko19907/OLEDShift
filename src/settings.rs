@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use crate::controller::Delays;
+use crate::settings_path::settings_path;
 
 #[derive(Serialize, Deserialize)]
 pub struct Settings {
@@ -75,8 +76,6 @@ impl Settings {
 
 
 
-const PATH: &str = "settings.json";
-
 pub struct SettingsManager {
     settings: Arc<Mutex<Settings>>,
 }
@@ -93,16 +92,18 @@ impl SettingsManager {
     pub fn new() -> Result<SettingsManager, (String, SettingsManager)> {
         println!("Loading settings...");
 
-        if !std::path::Path::new(PATH).exists() {
+        let path = settings_path();
+
+        if !path.exists() {
             println!("No settings file found, creating default settings...");
             let settings = Settings::default();
             let serialized = serde_json::to_string_pretty(&settings).unwrap();
-            if let Err(err) = write(PATH, serialized) {
+            if let Err(err) = write(&path, serialized) {
                 eprintln!("Failed to create the default settings file: {}", err);
             }
         }
 
-        let result = File::open(PATH)
+        let result = File::open(&path)
             .and_then(|mut file| {
                 let mut contents = String::new();
                 file.read_to_string(&mut contents)?;
@@ -145,7 +146,7 @@ impl SettingsManager {
 
                     // Update the settings file with the valid settings
                     let serialized = serde_json::to_string_pretty(&settings).expect("Failed to serialize the settings");
-                    if let Err(err) = write(PATH, serialized) {
+                    if let Err(err) = write(&path, serialized) {
                         eprintln!("Failed to update the settings file: {}", err);
                     }
 
@@ -174,8 +175,12 @@ impl SettingsManager {
 
     /// Serializes and saves the settings to the settings file
     fn save_settings(settings: &Settings) {
+        let path = settings_path();
         let serialized = serde_json::to_string_pretty(settings).unwrap();
-        write(PATH, serialized).unwrap();
+
+        if let Err(err) = write(&path, serialized) {
+            eprintln!("Failed to write settings file {:?}: {}", path, err);
+        }
     }
 
     // ---------------------------------------------------------------------------------------------
