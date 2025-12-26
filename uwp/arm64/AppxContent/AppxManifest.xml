@@ -10,13 +10,13 @@
   <Identity
     Name="Marko19907.OLEDShift"
     Publisher="CN=58823A99-7EDB-43BE-8BA7-75DFD82D34F2"
-    Version="1.1.3.0"
+    Version="1.1.4.0"
     ProcessorArchitecture="arm64" />
 
   <Properties>
     <DisplayName>OLEDShift</DisplayName>
     <PublisherDisplayName>Marko19907</PublisherDisplayName>
-    <Logo>Assets\Square150x150Logo.png</Logo>
+    <Logo>Assets\StoreLogo50x50.png</Logo>
   </Properties>
 
   <Resources>
