@@ -29,4 +29,4 @@ jobs:
         with:
           name: windows-${{ matrix.target == 'x86_64-pc-windows-msvc' && 'x64' || 'arm64' }}-binaries
           retention-days: 90
-          path: target/**/release/*.exe
+          path: target/${{ matrix.target }}/release/*.exe
