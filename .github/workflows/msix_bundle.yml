@@ -33,14 +33,15 @@ jobs:
 
       - name: Set up msixbundle-rs 🧰
         run: |
-          cargo install --git https://github.com/Choochmeque/msixbundle-rs msixbundle-cli
+          cargo install msixbundle-cli
 
       - name: Create MSIX Bundle 🧩
         run: |
           msixbundle-cli `
             --out-dir ./output `
             --dir-x64 ./uwp/x64/AppxContent `
-            --dir-arm64 ./uwp/arm64/AppxContent
+            --dir-arm64 ./uwp/arm64/AppxContent `
+            --validate
 
       - name: Upload MSIX Bundle 📤
         uses: actions/upload-artifact@v6
