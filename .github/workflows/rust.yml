@@ -10,16 +10,14 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        target: [x86_64-pc-windows-msvc, aarch64-pc-windows-msvc]
+        target: [x86_64-pc-windows-msvc, i686-pc-windows-msvc, aarch64-pc-windows-msvc]
 
     steps:
-
       - name: Checkout 📥
         uses: actions/checkout@v6
 
-      - name: Setup ARM toolchain 📦
-        if: matrix.target == 'aarch64-pc-windows-msvc'
-        run: rustup target add aarch64-pc-windows-msvc
+      - name: Add Rust target 📦
+        run: rustup target add ${{ matrix.target }}
 
       - name: Build 🛠
         run: cargo build --release --target ${{ matrix.target }}
@@ -27,6 +25,6 @@ jobs:
       - name: Upload binaries 📤
         uses: actions/upload-artifact@v6
         with:
-          name: windows-${{ matrix.target == 'x86_64-pc-windows-msvc' && 'x64' || 'arm64' }}-binaries
+          name: windows-${{ (matrix.target == 'x86_64-pc-windows-msvc' && 'x64') || (matrix.target == 'i686-pc-windows-msvc' && 'x86') || 'arm64' }}-binaries
           retention-days: 90
           path: target/${{ matrix.target }}/release/*.exe
