@@ -23,8 +23,6 @@ use windows::{
         UI::{
             Shell::{ABM_GETSTATE, ABS_AUTOHIDE, APPBARDATA, SHAppBarMessage},
             WindowsAndMessaging::{
-                AnimateWindow,
-                AW_CENTER,
                 EnumWindows,
                 GetClassNameW,
                 GetSystemMetrics,
@@ -237,10 +235,6 @@ fn move_window(hwnd: HWND) {
 
     unsafe {
         let _ = SetWindowPos(hwnd, Some(HWND_TOP), random_x, random_y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
-    }
-
-    if unsafe { AnimateWindow(hwnd, 4000, AW_CENTER) }.is_err() {
-        // Failed to animate window movement
     }
 
     return;
