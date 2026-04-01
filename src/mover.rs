@@ -6,10 +6,9 @@ use std::{
     },
     mem,
     os::{
-        raw::c_int,
         windows::ffi::OsStringExt
     },
-    sync::Once
+    sync::OnceLock
 };
 
 use lazy_static::lazy_static;
@@ -59,9 +58,13 @@ lazy_static! {
     };
 }
 
+struct IsWindowArrangedFn {
+    _user32: Library,
+    func: unsafe extern "system" fn(HWND) -> BOOL,
+}
+
 /// A function pointer to the IsWindowArranged function in user32.dll
-static mut IS_WINDOW_ARRANGED: Option<unsafe extern "system" fn(c_int) -> bool> = None;
-static INIT: Once = Once::new();
+static IS_WINDOW_ARRANGED: OnceLock<Option<IsWindowArrangedFn>> = OnceLock::new();
 
 fn is_taskbar_auto_hidden() -> bool {
     let mut app_bar_data: APPBARDATA = unsafe { std::mem::zeroed() };
@@ -82,20 +85,22 @@ fn get_taskbar_height() -> i32 {
 /// Loads the undocumented IsWindowArranged function from user32.dll
 /// It's actually provided by the windows crate but I'm leaving it like this to preserve Windows 7 compatibility
 fn is_window_snapped(hwnd: HWND) -> bool {
-    unsafe {
-        INIT.call_once(|| {
-            if let Ok(lib) = Library::new("user32.dll") {
-                IS_WINDOW_ARRANGED = lib
-                    .get::<unsafe extern "system" fn(c_int) -> bool>(b"IsWindowArranged")
-                    .ok()
-                    .map(|sym| *sym.into_raw()); // Convert the Symbol into a function pointer
-            }
-        });
-        if let Some(func) = IS_WINDOW_ARRANGED {
-            return func(hwnd.0 as isize as c_int);
-        }
-    }
-    return false;
+    let is_window_arranged = IS_WINDOW_ARRANGED.get_or_init(|| unsafe {
+        let user32 = Library::new("user32.dll").ok()?;
+        let func = *user32
+            .get::<unsafe extern "system" fn(HWND) -> BOOL>(b"IsWindowArranged")
+            .ok()?;
+
+        Some(IsWindowArrangedFn {
+            _user32: user32,
+            func,
+        })
+    });
+
+    return is_window_arranged
+        .as_ref()
+        .map(|is_window_arranged| unsafe { (is_window_arranged.func)(hwnd) != FALSE })
+        .unwrap_or(false);
 }
 
 /// Returns the smallest screen size in the form (width, height).
