@@ -12,7 +12,6 @@ dependencies = [
  "rand",
  "serde",
  "serde_json",
- "winapi",
  "windows",
  "winresource",
 ]

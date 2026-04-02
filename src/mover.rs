@@ -1,42 +1,43 @@
 use std::{
+    collections::HashSet,
+    ffi::{
+        c_void,
+        OsString
+    },
     mem,
-    os::raw::c_int,
-    ptr,
+    os::{
+        windows::ffi::OsStringExt
+    },
+    sync::OnceLock
 };
-use std::collections::HashSet;
-use std::ffi::OsString;
-use std::os::windows::ffi::OsStringExt;
-use std::sync::Once;
 
 use lazy_static::lazy_static;
 use libloading::Library;
 use rand::Rng;
-use winapi::{
-    shared::minwindef::{BOOL, LPARAM, LPVOID, TRUE, UINT},
-    shared::windef::{HDC, HMONITOR, HWND, RECT},
-    um::shellapi::{ABM_GETSTATE, ABS_AUTOHIDE, APPBARDATA, SHAppBarMessage},
-    um::winuser::{
-        AnimateWindow,
-        AW_CENTER,
-        EnumDisplayMonitors,
-        EnumWindows,
-        GetClassNameW,
-        GetMonitorInfoW,
-        GetSystemMetrics,
-        GetWindowPlacement,
-        HWND_TOP,
-        IsWindowVisible,
-        MonitorFromWindow,
-        MONITORINFO,
-        MONITORINFOEXW,
-        SetWindowPos,
-        SM_CYSCREEN,
-        SPI_GETWORKAREA,
-        SW_SHOWMAXIMIZED,
-        SWP_NOSIZE,
-        SWP_NOZORDER,
-        SystemParametersInfoW,
-        WINDOWPLACEMENT,
+use windows::{
+    core::BOOL,
+    Win32::{
+        Foundation::{FALSE, HWND, LPARAM, RECT, TRUE},
+        Graphics::Gdi::{EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITORINFO, MONITORINFOEXW, MONITOR_DEFAULTTONEAREST, MonitorFromWindow},
+        UI::{
+            Shell::{ABM_GETSTATE, ABS_AUTOHIDE, APPBARDATA, SHAppBarMessage},
+            WindowsAndMessaging::{
+                EnumWindows,
+                GetClassNameW,
+                GetSystemMetrics,
+                GetWindowPlacement,
+                HWND_TOP,
+                IsWindowVisible,
+                SetWindowPos,
+                SM_CYSCREEN,
+                SPI_GETWORKAREA,
+                SW_SHOWMAXIMIZED,
+                SWP_NOSIZE,
+                SWP_NOZORDER,
+                SystemParametersInfoW,
+                WINDOWPLACEMENT,
+            },
+        },
     },
 };
 
@@ -57,9 +58,13 @@ lazy_static! {
     };
 }
 
+struct IsWindowArrangedFn {
+    _user32: Library,
+    func: unsafe extern "system" fn(HWND) -> BOOL,
+}
+
 /// A function pointer to the IsWindowArranged function in user32.dll
-static mut IS_WINDOW_ARRANGED: Option<unsafe extern "system" fn(c_int) -> bool> = None;
-static INIT: Once = Once::new();
+static IS_WINDOW_ARRANGED: OnceLock<Option<IsWindowArrangedFn>> = OnceLock::new();
 
 fn is_taskbar_auto_hidden() -> bool {
     let mut app_bar_data: APPBARDATA = unsafe { std::mem::zeroed() };
@@ -71,27 +76,31 @@ fn is_taskbar_auto_hidden() -> bool {
 fn get_taskbar_height() -> i32 {
     let mut work_area_rect: RECT = unsafe { mem::zeroed() };
     unsafe {
-        SystemParametersInfoW(SPI_GETWORKAREA, 0, &mut work_area_rect as *mut _ as LPVOID, 0);
+        let _ = SystemParametersInfoW(SPI_GETWORKAREA, 0, Some(&mut work_area_rect as *mut _ as *mut c_void), Default::default());
     }
     let screen_height = unsafe { GetSystemMetrics(SM_CYSCREEN) };
     return screen_height - (work_area_rect.bottom - work_area_rect.top);
 }
 
+/// Loads the undocumented IsWindowArranged function from user32.dll
+/// It's actually provided by the windows crate but I'm leaving it like this to preserve Windows 7 compatibility
 fn is_window_snapped(hwnd: HWND) -> bool {
-    unsafe {
-        INIT.call_once(|| {
-            if let Ok(lib) = Library::new("user32.dll") {
-                IS_WINDOW_ARRANGED = lib
-                    .get::<unsafe extern "system" fn(c_int) -> bool>(b"IsWindowArranged")
-                    .ok()
-                    .map(|sym| *sym.into_raw()); // Convert the Symbol into a function pointer
-            }
-        });
-        if let Some(func) = IS_WINDOW_ARRANGED {
-            return func(hwnd as i32);
-        }
-    }
-    return false;
+    let is_window_arranged = IS_WINDOW_ARRANGED.get_or_init(|| unsafe {
+        let user32 = Library::new("user32.dll").ok()?;
+        let func = *user32
+            .get::<unsafe extern "system" fn(HWND) -> BOOL>(b"IsWindowArranged")
+            .ok()?;
+
+        Some(IsWindowArrangedFn {
+            _user32: user32,
+            func,
+        })
+    });
+
+    return is_window_arranged
+        .as_ref()
+        .map(|is_window_arranged| unsafe { (is_window_arranged.func)(hwnd) != FALSE })
+        .unwrap_or(false);
 }
 
 /// Returns the smallest screen size in the form (width, height).
@@ -99,11 +108,11 @@ pub fn get_smallest_screen_size() -> Option<(i32, i32)> {
     let mut screen_sizes: Vec<(i32, i32)> = Vec::new();
 
     unsafe {
-        EnumDisplayMonitors(
-            ptr::null_mut(),
-            ptr::null_mut(),
+        let _ = EnumDisplayMonitors(
+            None,
+            None,
             Some(enum_display_monitors_callback),
-            &mut screen_sizes as *mut _ as LPARAM,
+            LPARAM(&mut screen_sizes as *mut _ as isize),
         );
     }
 
@@ -116,15 +125,15 @@ unsafe extern "system" fn enum_display_monitors_callback(
     _lprect: *mut RECT,
     lparam: LPARAM,
 ) -> BOOL {
-    let screen_sizes = &mut *(lparam as *mut Vec<(i32, i32)>);
+    let screen_sizes = &mut *(lparam.0 as *mut Vec<(i32, i32)>);
 
     let mut monitor_info: MONITORINFOEXW = mem::zeroed();
-    monitor_info.cbSize = mem::size_of::<MONITORINFOEXW>() as u32;
+    monitor_info.monitorInfo.cbSize = mem::size_of::<MONITORINFOEXW>() as u32;
 
-    GetMonitorInfoW(_hmonitor, &mut monitor_info as *mut _ as *mut _);
+    let _ = GetMonitorInfoW(_hmonitor, &mut monitor_info as *mut _ as *mut MONITORINFO);
 
-    let width = monitor_info.rcMonitor.right - monitor_info.rcMonitor.left;
-    let height = monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top;
+    let width = monitor_info.monitorInfo.rcMonitor.right - monitor_info.monitorInfo.rcMonitor.left;
+    let height = monitor_info.monitorInfo.rcMonitor.bottom - monitor_info.monitorInfo.rcMonitor.top;
 
     screen_sizes.push((width, height));
 
@@ -133,19 +142,19 @@ unsafe extern "system" fn enum_display_monitors_callback(
 
 /// Returns true if the window is visible.
 fn is_window_visible(hwnd: HWND) -> bool {
-    return unsafe { IsWindowVisible(hwnd) != 0 };
+    return unsafe { IsWindowVisible(hwnd) != FALSE };
 }
 
 /// Returns true if the window is maximized.
 fn is_window_maximized(wp: &WINDOWPLACEMENT) -> bool {
-    return wp.showCmd as i32 == SW_SHOWMAXIMIZED;
+    return wp.showCmd == SW_SHOWMAXIMIZED.0 as u32;
 }
 
 /// Returns true if the window should be excluded from being moved based on its title or class.
 fn is_excluded(hwnd: HWND) -> bool {
     // Get the window class
     let mut class_name = [0u16; 1024];
-    let class_length = unsafe { GetClassNameW(hwnd, class_name.as_mut_ptr(), 1024) } as usize;
+    let class_length = unsafe { GetClassNameW(hwnd, &mut class_name) } as usize;
     let class_name = OsString::from_wide(&class_name[..class_length]);
 
     return CLASS_EXCLUSIONS.contains(class_name.to_str().unwrap_or(""));
@@ -178,22 +187,26 @@ fn move_window(hwnd: HWND) {
     }
 
     let mut wp: WINDOWPLACEMENT = unsafe { mem::zeroed() };
-    wp.length = mem::size_of::<WINDOWPLACEMENT>() as UINT;
-    unsafe { GetWindowPlacement(hwnd, &mut wp) };
+    wp.length = mem::size_of::<WINDOWPLACEMENT>() as u32;
+    unsafe {
+        let _ = GetWindowPlacement(hwnd, &mut wp);
+    }
 
     if is_window_maximized(&wp) || is_window_snapped(hwnd) || is_excluded(hwnd) {
         return;
     }
 
-    let h_monitor = unsafe { MonitorFromWindow(hwnd, winapi::um::winuser::MONITOR_DEFAULTTONEAREST) };
+    let h_monitor = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST) };
 
     if !is_monitor_included(&h_monitor) {
         return;
     }
 
     let mut monitor_info: MONITORINFO = unsafe { mem::zeroed() };
-    monitor_info.cbSize = mem::size_of::<MONITORINFO>() as UINT;
-    unsafe { GetMonitorInfoW(h_monitor, &mut monitor_info) };
+    monitor_info.cbSize = mem::size_of::<MONITORINFO>() as u32;
+    unsafe {
+        let _ = GetMonitorInfoW(h_monitor, &mut monitor_info);
+    }
 
     let screen_width = monitor_info.rcMonitor.right - monitor_info.rcMonitor.left;
     let screen_height = monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top;
@@ -225,10 +238,8 @@ fn move_window(hwnd: HWND) {
         random_y = i32::min(random_y, monitor_info.rcMonitor.bottom - window_height - taskbar_height);
     }
 
-    unsafe { SetWindowPos(hwnd, HWND_TOP, random_x, random_y, 0, 0, SWP_NOSIZE | SWP_NOZORDER) };
-
-    if unsafe { AnimateWindow(hwnd, 4000, AW_CENTER) } == 0 {
-        // Failed to animate window movement
+    unsafe {
+        let _ = SetWindowPos(hwnd, Some(HWND_TOP), random_x, random_y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
     }
 
     return;
@@ -242,6 +253,6 @@ unsafe extern "system" fn enum_windows_proc(hwnd: HWND, _: LPARAM) -> BOOL {
 /// Moves the windows just once.
 pub fn move_all_windows() {
     unsafe {
-        EnumWindows(Some(enum_windows_proc), 0);
+        let _ = EnumWindows(Some(enum_windows_proc), LPARAM(0));
     }
 }

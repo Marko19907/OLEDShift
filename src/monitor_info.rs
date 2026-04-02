@@ -1,10 +1,15 @@
-use std::ffi::OsString;
-use std::os::windows::ffi::{OsStrExt, OsStringExt};
-use std::{mem, ptr};
-use winapi::shared::minwindef::{BOOL, LPARAM, TRUE, UINT};
-use winapi::shared::windef::{HDC, HMONITOR, RECT};
-use winapi::um::wingdi::DISPLAY_DEVICEW;
-use winapi::um::winuser::{EnumDisplayDevicesW, EnumDisplayMonitors, GetMonitorInfoW, MONITORINFOEXW};
+use std::{
+    ffi::OsString,
+    os::windows::ffi::{OsStrExt, OsStringExt},
+    mem
+};
+use windows::{
+    core::{BOOL, PCWSTR},
+    Win32::{
+        Foundation::{FALSE, LPARAM, RECT, TRUE},
+        Graphics::Gdi::{DISPLAY_DEVICEW, EnumDisplayDevicesW, EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITORINFO, MONITORINFOEXW},
+    },
+};
 
 unsafe extern "system" fn enum_display_monitors_collect_callback(
     hmonitor: HMONITOR,
@@ -12,12 +17,12 @@ unsafe extern "system" fn enum_display_monitors_collect_callback(
     _lprect: *mut RECT,
     lparam: LPARAM
 ) -> BOOL {
-    let monitors_info = &mut *(lparam as *mut Vec<MONITORINFOEXW>);
+    let monitors_info = &mut *(lparam.0 as *mut Vec<MONITORINFOEXW>);
 
     let mut monitor_info: MONITORINFOEXW = mem::zeroed();
-    monitor_info.cbSize = mem::size_of::<MONITORINFOEXW>() as u32;
+    monitor_info.monitorInfo.cbSize = mem::size_of::<MONITORINFOEXW>() as u32;
 
-    if GetMonitorInfoW(hmonitor, &mut monitor_info as *mut _ as *mut _) == 0 {
+    if GetMonitorInfoW(hmonitor, &mut monitor_info as *mut _ as *mut MONITORINFO) == FALSE {
         return TRUE;
     }
 
@@ -29,11 +34,11 @@ unsafe extern "system" fn enum_display_monitors_collect_callback(
 pub fn get_all_monitors_info() -> Vec<MONITORINFOEXW> {
     let mut monitors_info: Vec<MONITORINFOEXW> = Vec::new();
     unsafe {
-        EnumDisplayMonitors(
-            ptr::null_mut(),
-            ptr::null_mut(),
+        let _ = EnumDisplayMonitors(
+            None,
+            None,
             Some(enum_display_monitors_collect_callback),
-            &mut monitors_info as *mut _ as LPARAM,
+            LPARAM(&mut monitors_info as *mut _ as isize),
         );
     }
     return monitors_info;
@@ -63,7 +68,7 @@ pub fn get_display_device_info(device_name: &str) -> Option<(String, String)> {
 
         // iDevNum=0 fetches info about the primary device entry
         // If the call fails, return None
-        let success = EnumDisplayDevicesW(wide_devname.as_ptr(), 0, &mut display_device, 0) != 0;
+        let success = EnumDisplayDevicesW(PCWSTR(wide_devname.as_ptr()), 0, &mut display_device, 0) != FALSE;
         if !success {
             return None;
         }
@@ -90,10 +95,10 @@ pub fn get_display_device_info(device_name: &str) -> Option<(String, String)> {
 pub fn get_monitor_info_ex(h_monitor: HMONITOR) -> Option<MONITORINFOEXW> {
     unsafe {
         let mut mon_info_ex: MONITORINFOEXW = mem::zeroed();
-        mon_info_ex.cbSize = mem::size_of::<MONITORINFOEXW>() as UINT;
+        mon_info_ex.monitorInfo.cbSize = mem::size_of::<MONITORINFOEXW>() as u32;
 
-        let success = GetMonitorInfoW(h_monitor, &mut mon_info_ex as *mut _ as *mut _);
-        return if success == 0 {
+        let success = GetMonitorInfoW(h_monitor, &mut mon_info_ex as *mut _ as *mut MONITORINFO);
+        return if success == FALSE {
             None
         } else {
             Some(mon_info_ex)
