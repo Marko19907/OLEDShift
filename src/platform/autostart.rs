@@ -5,6 +5,7 @@ pub enum AutoStartState {
     Unsupported,
     Disabled,
     Enabled,
+    EnabledByPolicy,
     DisabledByUser,
     DisabledByPolicy,
 }
@@ -117,7 +118,8 @@ cfg_if! {
             fn map_state(state: StartupTaskState) -> AutoStartState {
                 return match state {
                     StartupTaskState::Disabled => AutoStartState::Disabled,
-                    StartupTaskState::Enabled | StartupTaskState::EnabledByPolicy => AutoStartState::Enabled,
+                    StartupTaskState::Enabled => AutoStartState::Enabled,
+                    StartupTaskState::EnabledByPolicy => AutoStartState::EnabledByPolicy,
                     StartupTaskState::DisabledByUser => AutoStartState::DisabledByUser,
                     StartupTaskState::DisabledByPolicy => AutoStartState::DisabledByPolicy,
                     _ => AutoStartState::Unsupported,

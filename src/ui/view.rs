@@ -151,13 +151,17 @@ impl SystemTray {
 
     fn update_auto_start_toggle(&self) {
         let state = self.auto_start_manager.state();
-        let checked = matches!(state, AutoStartState::Enabled);
+        let checked = match state {
+            AutoStartState::Enabled | AutoStartState::EnabledByPolicy => true,
+            _ => false,
+        };
+        let enabled = match state {
+            AutoStartState::Unsupported | AutoStartState::EnabledByPolicy | AutoStartState::DisabledByUser | AutoStartState::DisabledByPolicy => false,
+            _ => true
+        };
 
         // Order is important here, first enable, then check it!
-        self.auto_start_toggle.set_enabled(!matches!(
-            state,
-            AutoStartState::Unsupported | AutoStartState::DisabledByPolicy
-        ));
+        self.auto_start_toggle.set_enabled(enabled);
         self.auto_start_toggle.set_checked(checked);
     }
 
