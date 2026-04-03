@@ -26,13 +26,13 @@ use windows::{
                 GetClassNameW,
                 GetSystemMetrics,
                 GetWindowPlacement,
+                GetWindowRect,
                 HWND_TOP,
                 IsWindowVisible,
                 SetWindowPos,
                 SM_CYSCREEN,
                 SPI_GETWORKAREA,
                 SW_SHOWMAXIMIZED,
-                SWP_NOSIZE,
                 SWP_NOZORDER,
                 SystemParametersInfoW,
                 WINDOWPLACEMENT,
@@ -238,8 +238,18 @@ fn move_window(hwnd: HWND) {
         random_y = i32::min(random_y, monitor_info.rcMonitor.bottom - window_height - taskbar_height);
     }
 
+    let mut current_rect: RECT = unsafe { mem::zeroed() };
+    let (current_width, current_height) = if unsafe { GetWindowRect(hwnd, &mut current_rect) }.is_ok() {
+        (
+            current_rect.right - current_rect.left,
+            current_rect.bottom - current_rect.top,
+        )
+    } else {
+        (window_width, window_height)
+    };
+
     unsafe {
-        let _ = SetWindowPos(hwnd, Some(HWND_TOP), random_x, random_y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+        let _ = SetWindowPos(hwnd, Some(HWND_TOP), random_x, random_y, current_width, current_height, SWP_NOZORDER);
     }
 
     return;
