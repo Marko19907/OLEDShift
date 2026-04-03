@@ -54,7 +54,8 @@ impl SystemTray {
         }
     }
 
-    fn show_menu(&self) {
+    fn prepare_and_show_menu(&self) {
+        // Only refresh the automatic start toggle, that's the only "external" thing that can change
         self.update_auto_start_toggle();
 
         let (x, y) = nwg::GlobalCursor::position();
@@ -547,7 +548,7 @@ mod system_tray_ui {
                             }
                         E::OnContextMenu =>
                             if &handle == &evt_ui.tray {
-                                SystemTray::show_menu(&evt_ui);
+                                SystemTray::prepare_and_show_menu(&evt_ui);
                             }
                         E::OnMenuHover => {
                             if &handle == &evt_ui.screen_menu {
