@@ -28,6 +28,9 @@ pub struct SystemTray {
     distance_custom_menu: nwg::MenuItem,
     screen_menu: nwg::Menu,
     screens_map: RefCell<HashMap<String, nwg::MenuItem>>,
+    separator_report_problem: nwg::MenuSeparator,
+    report_problem_menu: nwg::MenuItem,
+    separator_exit: nwg::MenuSeparator,
     exit_menu: nwg::MenuItem,
     separator_delay: nwg::MenuSeparator,
     separator_distance: nwg::MenuSeparator,
@@ -257,6 +260,12 @@ impl SystemTray {
         controller.set_monitor_state(device_id, !enabled);
     }
 
+    fn report_problem(&self) {
+        if let Err(err) = open::that("https://github.com/Marko19907/OLEDShift/issues") {
+            nwg::modal_error_message(&self.window, "Failed to open browser", &err.to_string());
+        }
+    }
+
     fn exit(&self) {
         nwg::stop_thread_dispatch();
     }
@@ -430,7 +439,16 @@ mod system_tray_ui {
 
             nwg::MenuSeparator::builder()
                 .parent(&data.tray_menu)
-                .build(&mut data.separator_delay)?;
+                .build(&mut data.separator_report_problem)?;
+
+            nwg::MenuItem::builder()
+                .text("Report a problem")
+                .parent(&data.tray_menu)
+                .build(&mut data.report_problem_menu)?;
+
+            nwg::MenuSeparator::builder()
+                .parent(&data.tray_menu)
+                .build(&mut data.separator_exit)?;
 
             nwg::MenuItem::builder()
                 .text("Exit")
@@ -522,6 +540,9 @@ mod system_tray_ui {
                             }
                             else if &handle == &evt_ui.distance_custom_menu {
                                 SystemTray::do_distance(&evt_ui, Distances::Custom);
+                            }
+                            else if &handle == &evt_ui.report_problem_menu {
+                                SystemTray::report_problem(&evt_ui);
                             }
                             else if &handle == &evt_ui.exit_menu {
                                 SystemTray::exit(&evt_ui);
