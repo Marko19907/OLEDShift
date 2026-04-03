@@ -28,5 +28,5 @@ rand = "0.9"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.147"
 open = "5.3.3"
-windows = { version = "0.62.2", features = ["ApplicationModel", "Foundation", "Storage", "Storage_Search", "Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Storage_Packaging_Appx", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.62.2", features = ["ApplicationModel", "ApplicationModel_Activation", "Foundation", "Storage", "Storage_Search", "Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Storage_Packaging_Appx", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 windows-future = "0.3.2"

@@ -19,10 +19,14 @@ mod settings;
 mod monitor_info;
 mod settings_path;
 mod autostart;
+mod launch_context;
 
 
 fn main() {
     nwg::init().expect("Failed to init Native Windows GUI");
-    let _ui = SystemTray::build_ui(Default::default()).expect("Failed to build UI");
+    let _ui = SystemTray::build_ui(SystemTray::new(
+        !launch_context::started_by_startup_task()
+    ))
+        .expect("Failed to build UI");
     nwg::dispatch_thread_events();
 }

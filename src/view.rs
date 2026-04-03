@@ -11,6 +11,8 @@ pub static ICON: &[u8] = include_bytes!("../icon.ico");
 
 #[derive(Default)]
 pub struct SystemTray {
+    launched_by_user: bool,
+
     window: nwg::MessageWindow,
     icon: nwg::Icon,
     tray: nwg::TrayNotification,
@@ -45,6 +47,13 @@ pub struct SystemTray {
 }
 
 impl SystemTray {
+    pub fn new(launched_by_user: bool) -> Self {
+        Self {
+            launched_by_user,
+            ..Default::default()
+        }
+    }
+
     fn show_menu(&self) {
         self.update_auto_start_toggle();
 
@@ -520,7 +529,9 @@ mod system_tray_ui {
             ui.inner.update_tooltip();
             update_screens_submenu(&ui.inner);
 
-            SystemTray::show_start_message(&ui.inner);
+            if ui.inner.launched_by_user {
+                SystemTray::show_start_message(&ui.inner);
+            }
 
             // Events
             let evt_ui = Rc::downgrade(&ui.inner);
