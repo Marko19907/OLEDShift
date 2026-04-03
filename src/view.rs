@@ -550,7 +550,7 @@ mod system_tray_ui {
                             if &handle == &evt_ui.tray {
                                 SystemTray::prepare_and_show_menu(&evt_ui);
                             }
-                        E::OnMenuHover => {
+                        E::OnMenuOpen => {
                             if &handle == &evt_ui.screen_menu {
                                 // TODO: Maybe we can listen for monitor changes instead of updating everything on hover?
                                 update_screens_submenu(&*evt_ui);
