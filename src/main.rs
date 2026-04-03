@@ -20,6 +20,7 @@ mod monitor_info;
 mod settings_path;
 mod autostart;
 mod launch_context;
+mod url_launcher;
 
 
 fn main() {

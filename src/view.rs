@@ -2,6 +2,7 @@ use crate::autostart::{AutoStartManager, AutoStartState, PlatformAutoStartManage
 use crate::controller::{Controller, Delays, Distances};
 use crate::delay_dialog::{DelayDialog, DelayDialogData};
 use crate::distance_dialog::{DistanceDialog, DistanceDialogData};
+use crate::url_launcher::open_report_problem;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -298,7 +299,7 @@ impl SystemTray {
     }
 
     fn report_problem(&self) {
-        if let Err(err) = open::that("https://github.com/Marko19907/OLEDShift/issues") {
+        if let Err(err) = open_report_problem("https://github.com/Marko19907/OLEDShift/issues") {
             nwg::modal_error_message(&self.window, "Failed to open browser", &err.to_string());
         }
     }
