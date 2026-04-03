@@ -3,9 +3,9 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use crate::monitor_info::{get_all_monitors_info, get_display_device_info, monitor_device_name};
-use crate::mover;
-use crate::settings::SettingsManager;
+use crate::config::settings::SettingsManager;
+use crate::platform::monitor_info::{get_all_monitors_info, get_display_device_info, monitor_device_name};
+use crate::platform::mover;
 use lazy_static::lazy_static;
 
 /// The delays that can be selected from the tray menu, in milliseconds

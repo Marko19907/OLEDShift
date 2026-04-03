@@ -1,14 +1,14 @@
-use crate::autostart::{AutoStartManager, AutoStartState, PlatformAutoStartManager};
-use crate::controller::{Controller, Delays, Distances};
-use crate::delay_dialog::{DelayDialog, DelayDialogData};
-use crate::distance_dialog::{DistanceDialog, DistanceDialogData};
-use crate::url_launcher::open_report_problem;
+use crate::app::controller::{Controller, Delays, Distances};
+use crate::platform::autostart::{AutoStartManager, AutoStartState, PlatformAutoStartManager};
+use crate::platform::url_launcher::open_report_problem;
+use crate::ui::dialogs::delay_dialog::{DelayDialog, DelayDialogData};
+use crate::ui::dialogs::distance_dialog::{DistanceDialog, DistanceDialogData};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::{cell::RefCell, thread};
 
-pub static ICON: &[u8] = include_bytes!("../icon.ico");
+pub static ICON: &[u8] = include_bytes!("../../icon.ico");
 
 #[derive(Default)]
 pub struct SystemTray {
@@ -314,9 +314,9 @@ impl SystemTray {
 // ALL of this stuff is handled by native-windows-derive
 //
 mod system_tray_ui {
-    use crate::controller::{Controller, Delays, Distances};
-    use crate::settings::SettingsManager;
-    use crate::view::{SystemTray, ICON};
+    use crate::app::controller::{Controller, Delays, Distances};
+    use crate::config::settings::SettingsManager;
+    use crate::ui::view::{SystemTray, ICON};
     use native_windows_gui as nwg;
     use std::cell::RefCell;
     use std::ops::Deref;

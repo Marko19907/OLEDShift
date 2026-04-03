@@ -4,8 +4,8 @@ use std::io::Read;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use serde::{Deserialize, Serialize};
-use crate::controller::Delays;
-use crate::settings_path::settings_path;
+use crate::app::controller::Delays;
+use crate::config::settings_path::settings_path;
 
 #[derive(Serialize, Deserialize)]
 pub struct Settings {

@@ -42,8 +42,8 @@ use windows::{
     },
 };
 
-use crate::controller::{ENABLED_MONITORS, MAX_MOVE};
-use crate::monitor_info::{get_display_device_info, get_monitor_info_ex, monitor_device_name};
+use crate::app::controller::{ENABLED_MONITORS, MAX_MOVE};
+use crate::platform::monitor_info::{get_display_device_info, get_monitor_info_ex, monitor_device_name};
 
 
 lazy_static! {

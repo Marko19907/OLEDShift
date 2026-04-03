@@ -17,7 +17,7 @@ pub trait AutoStartManager {
 cfg_if! {
     if #[cfg(target_os = "windows")] {
         mod platform {
-            use crate::autostart::{AutoStartManager, AutoStartState};
+            use crate::platform::autostart::{AutoStartManager, AutoStartState};
             use std::{
                 thread,
                 time::{Duration, Instant}
@@ -127,7 +127,7 @@ cfg_if! {
     }
     else {
         mod platform {
-            use crate::autostart::{AutoStartManager, AutoStartState};
+            use crate::platform::autostart::{AutoStartManager, AutoStartState};
 
             #[derive(Default)]
             pub struct PlatformAutoStartManager;
