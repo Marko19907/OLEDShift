@@ -19,6 +19,7 @@ pub struct SystemTray {
     tray: nwg::TrayNotification,
     tray_menu: nwg::Menu,
     enabled_toggle: nwg::MenuItem,
+    separator_auto_start: nwg::MenuSeparator,
     auto_start_toggle: nwg::MenuItem,
     delay_menu: nwg::Menu,
     delay_30_menu: nwg::MenuItem,
@@ -405,6 +406,10 @@ mod system_tray_ui {
                 .check(true)
                 .parent(&data.tray_menu)
                 .build(&mut data.enabled_toggle)?;
+
+            nwg::MenuSeparator::builder()
+                .parent(&data.tray_menu)
+                .build(&mut data.separator_auto_start)?;
 
             nwg::MenuItem::builder()
                 .text("Launch at startup")
