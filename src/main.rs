@@ -18,6 +18,7 @@ mod distance_dialog;
 mod settings;
 mod monitor_info;
 mod settings_path;
+mod autostart;
 
 
 fn main() {

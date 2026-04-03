@@ -1,3 +1,4 @@
+use crate::autostart::{AutoStartManager, AutoStartState, PlatformAutoStartManager};
 use crate::controller::{Controller, Delays, Distances};
 use crate::delay_dialog::{DelayDialog, DelayDialogData};
 use crate::distance_dialog::{DistanceDialog, DistanceDialogData};
@@ -15,6 +16,7 @@ pub struct SystemTray {
     tray: nwg::TrayNotification,
     tray_menu: nwg::Menu,
     enabled_toggle: nwg::MenuItem,
+    auto_start_toggle: nwg::MenuItem,
     delay_menu: nwg::Menu,
     delay_30_menu: nwg::MenuItem,
     delay_1_menu: nwg::MenuItem,
@@ -39,10 +41,13 @@ pub struct SystemTray {
     delay_dialog_notice: nwg::Notice,
     distance_dialog_data: RefCell<Option<thread::JoinHandle<DistanceDialogData>>>,
     distance_dialog_notice: nwg::Notice,
+    auto_start_manager: PlatformAutoStartManager,
 }
 
 impl SystemTray {
     fn show_menu(&self) {
+        self.update_auto_start_toggle();
+
         let (x, y) = nwg::GlobalCursor::position();
         self.tray_menu.popup(x, y);
     }
@@ -52,6 +57,16 @@ impl SystemTray {
         self.controller.lock().unwrap().toggle_running();
         self.update_toggle();
         self.update_tooltip();
+    }
+
+    fn toggle_auto_start(&self) {
+        let currently_enabled = matches!(self.auto_start_manager.state(), AutoStartState::Enabled);
+
+        if let Err(err) = self.auto_start_manager.set_enabled(!currently_enabled) {
+            nwg::modal_error_message(&self.window, "Failed to update startup task", &err);
+        }
+
+        self.update_auto_start_toggle();
     }
 
     fn hello1(&self) {
@@ -120,6 +135,18 @@ impl SystemTray {
     /// Updates the toggle menu item to reflect the current state of the controller
     fn update_toggle(&self) {
         self.enabled_toggle.set_checked(self.controller.lock().unwrap().is_running());
+    }
+
+    fn update_auto_start_toggle(&self) {
+        let state = self.auto_start_manager.state();
+        let checked = matches!(state, AutoStartState::Enabled);
+
+        // Order is important here, first enable, then check it!
+        self.auto_start_toggle.set_enabled(!matches!(
+            state,
+            AutoStartState::Unsupported | AutoStartState::DisabledByPolicy
+        ));
+        self.auto_start_toggle.set_checked(checked);
     }
 
     /// Updates the delay menu item to reflect the current state of the controller
@@ -368,6 +395,12 @@ mod system_tray_ui {
                 .parent(&data.tray_menu)
                 .build(&mut data.enabled_toggle)?;
 
+            nwg::MenuItem::builder()
+                .text("Launch at startup")
+                .check(true)
+                .parent(&data.tray_menu)
+                .build(&mut data.auto_start_toggle)?;
+
             nwg::Menu::builder()
                 .text("Delay")
                 .parent(&data.tray_menu)
@@ -483,6 +516,7 @@ mod system_tray_ui {
             ui.inner.update_delay_menu();
             ui.inner.update_distance_menu();
             ui.inner.update_toggle();
+            ui.inner.update_auto_start_toggle();
             ui.inner.update_tooltip();
             update_screens_submenu(&ui.inner);
 
@@ -513,6 +547,9 @@ mod system_tray_ui {
                         E::OnMenuItemSelected => {
                             if &handle == &evt_ui.enabled_toggle {
                                 SystemTray::toggle_enabled(&evt_ui);
+                            }
+                            else if &handle == &evt_ui.auto_start_toggle {
+                                SystemTray::toggle_auto_start(&evt_ui);
                             }
                             else if &handle == &evt_ui.delay_30_menu {
                                 SystemTray::do_delay(&evt_ui, Delays::ThirtySeconds)
