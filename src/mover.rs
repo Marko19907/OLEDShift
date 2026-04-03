@@ -33,6 +33,7 @@ use windows::{
                 SM_CYSCREEN,
                 SPI_GETWORKAREA,
                 SW_SHOWMAXIMIZED,
+                SWP_NOSIZE,
                 SWP_NOZORDER,
                 SystemParametersInfoW,
                 WINDOWPLACEMENT,
@@ -249,7 +250,7 @@ fn move_window(hwnd: HWND) {
     };
 
     unsafe {
-        let _ = SetWindowPos(hwnd, Some(HWND_TOP), random_x, random_y, current_width, current_height, SWP_NOZORDER);
+        let _ = SetWindowPos(hwnd, Some(HWND_TOP), random_x, random_y, current_width, current_height, SWP_NOSIZE | SWP_NOZORDER);
     }
 
     return;
