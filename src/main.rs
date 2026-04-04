@@ -8,20 +8,20 @@ Requires the following features: `cargo run --example system_tray --features "tr
 extern crate native_windows_gui as nwg;
 
 use nwg::NativeUi;
-use view::SystemTray;
+use crate::platform::launch_context;
+use crate::ui::view::SystemTray;
 
-mod view;
-mod mover;
-mod controller;
-mod delay_dialog;
-mod distance_dialog;
-mod settings;
-mod monitor_info;
-mod settings_path;
+mod app;
+mod ui;
+mod platform;
+mod config;
 
 
 fn main() {
     nwg::init().expect("Failed to init Native Windows GUI");
-    let _ui = SystemTray::build_ui(Default::default()).expect("Failed to build UI");
+    let _ui = SystemTray::build_ui(SystemTray::new(
+        !launch_context::started_by_startup_task()
+    ))
+        .expect("Failed to build UI");
     nwg::dispatch_thread_events();
 }

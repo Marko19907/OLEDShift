@@ -1,20 +1,26 @@
-use crate::controller::{Controller, Delays, Distances};
-use crate::delay_dialog::{DelayDialog, DelayDialogData};
-use crate::distance_dialog::{DistanceDialog, DistanceDialogData};
+use crate::app::controller::{Controller, Delays, Distances};
+use crate::platform::autostart::{AutoStartManager, AutoStartState, PlatformAutoStartManager};
+use crate::platform::url_launcher::open_report_problem;
+use crate::ui::dialogs::delay_dialog::{DelayDialog, DelayDialogData};
+use crate::ui::dialogs::distance_dialog::{DistanceDialog, DistanceDialogData};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::{cell::RefCell, thread};
 
-pub static ICON: &[u8] = include_bytes!("../icon.ico");
+pub static ICON: &[u8] = include_bytes!("../../icon.ico");
 
 #[derive(Default)]
 pub struct SystemTray {
+    launched_by_user: bool,
+
     window: nwg::MessageWindow,
     icon: nwg::Icon,
     tray: nwg::TrayNotification,
     tray_menu: nwg::Menu,
     enabled_toggle: nwg::MenuItem,
+    separator_auto_start: nwg::MenuSeparator,
+    auto_start_toggle: nwg::MenuItem,
     delay_menu: nwg::Menu,
     delay_30_menu: nwg::MenuItem,
     delay_1_menu: nwg::MenuItem,
@@ -39,10 +45,21 @@ pub struct SystemTray {
     delay_dialog_notice: nwg::Notice,
     distance_dialog_data: RefCell<Option<thread::JoinHandle<DistanceDialogData>>>,
     distance_dialog_notice: nwg::Notice,
+    auto_start_manager: PlatformAutoStartManager,
 }
 
 impl SystemTray {
-    fn show_menu(&self) {
+    pub fn new(launched_by_user: bool) -> Self {
+        Self {
+            launched_by_user,
+            ..Default::default()
+        }
+    }
+
+    fn prepare_and_show_menu(&self) {
+        // Only refresh the automatic start toggle, that's the only "external" thing that can change
+        self.update_auto_start_toggle();
+
         let (x, y) = nwg::GlobalCursor::position();
         self.tray_menu.popup(x, y);
     }
@@ -52,6 +69,16 @@ impl SystemTray {
         self.controller.lock().unwrap().toggle_running();
         self.update_toggle();
         self.update_tooltip();
+    }
+
+    fn toggle_auto_start(&self) {
+        let currently_enabled = matches!(self.auto_start_manager.state(), AutoStartState::Enabled);
+
+        if let Err(err) = self.auto_start_manager.set_enabled(!currently_enabled) {
+            nwg::modal_error_message(&self.window, "Failed to update startup task", &err);
+        }
+
+        self.update_auto_start_toggle();
     }
 
     fn hello1(&self) {
@@ -120,6 +147,22 @@ impl SystemTray {
     /// Updates the toggle menu item to reflect the current state of the controller
     fn update_toggle(&self) {
         self.enabled_toggle.set_checked(self.controller.lock().unwrap().is_running());
+    }
+
+    fn update_auto_start_toggle(&self) {
+        let state = self.auto_start_manager.state();
+        let checked = match state {
+            AutoStartState::Enabled | AutoStartState::EnabledByPolicy => true,
+            _ => false,
+        };
+        let enabled = match state {
+            AutoStartState::Unsupported | AutoStartState::EnabledByPolicy | AutoStartState::DisabledByUser | AutoStartState::DisabledByPolicy => false,
+            _ => true
+        };
+
+        // Order is important here, first enable, then check it!
+        self.auto_start_toggle.set_enabled(enabled);
+        self.auto_start_toggle.set_checked(checked);
     }
 
     /// Updates the delay menu item to reflect the current state of the controller
@@ -261,7 +304,7 @@ impl SystemTray {
     }
 
     fn report_problem(&self) {
-        if let Err(err) = open::that("https://github.com/Marko19907/OLEDShift/issues") {
+        if let Err(err) = open_report_problem("https://github.com/Marko19907/OLEDShift/issues") {
             nwg::modal_error_message(&self.window, "Failed to open browser", &err.to_string());
         }
     }
@@ -276,9 +319,9 @@ impl SystemTray {
 // ALL of this stuff is handled by native-windows-derive
 //
 mod system_tray_ui {
-    use crate::controller::{Controller, Delays, Distances};
-    use crate::settings::SettingsManager;
-    use crate::view::{SystemTray, ICON};
+    use crate::app::controller::{Controller, Delays, Distances};
+    use crate::config::settings::SettingsManager;
+    use crate::ui::view::{SystemTray, ICON};
     use native_windows_gui as nwg;
     use std::cell::RefCell;
     use std::ops::Deref;
@@ -367,6 +410,16 @@ mod system_tray_ui {
                 .check(true)
                 .parent(&data.tray_menu)
                 .build(&mut data.enabled_toggle)?;
+
+            nwg::MenuSeparator::builder()
+                .parent(&data.tray_menu)
+                .build(&mut data.separator_auto_start)?;
+
+            nwg::MenuItem::builder()
+                .text("Launch at startup")
+                .check(true)
+                .parent(&data.tray_menu)
+                .build(&mut data.auto_start_toggle)?;
 
             nwg::Menu::builder()
                 .text("Delay")
@@ -483,10 +536,13 @@ mod system_tray_ui {
             ui.inner.update_delay_menu();
             ui.inner.update_distance_menu();
             ui.inner.update_toggle();
+            ui.inner.update_auto_start_toggle();
             ui.inner.update_tooltip();
             update_screens_submenu(&ui.inner);
 
-            SystemTray::show_start_message(&ui.inner);
+            if ui.inner.launched_by_user {
+                SystemTray::show_start_message(&ui.inner);
+            }
 
             // Events
             let evt_ui = Rc::downgrade(&ui.inner);
@@ -502,9 +558,9 @@ mod system_tray_ui {
                             }
                         E::OnContextMenu =>
                             if &handle == &evt_ui.tray {
-                                SystemTray::show_menu(&evt_ui);
+                                SystemTray::prepare_and_show_menu(&evt_ui);
                             }
-                        E::OnMenuHover => {
+                        E::OnMenuOpen => {
                             if &handle == &evt_ui.screen_menu {
                                 // TODO: Maybe we can listen for monitor changes instead of updating everything on hover?
                                 update_screens_submenu(&*evt_ui);
@@ -513,6 +569,9 @@ mod system_tray_ui {
                         E::OnMenuItemSelected => {
                             if &handle == &evt_ui.enabled_toggle {
                                 SystemTray::toggle_enabled(&evt_ui);
+                            }
+                            else if &handle == &evt_ui.auto_start_toggle {
+                                SystemTray::toggle_auto_start(&evt_ui);
                             }
                             else if &handle == &evt_ui.delay_30_menu {
                                 SystemTray::do_delay(&evt_ui, Delays::ThirtySeconds)

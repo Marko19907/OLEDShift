@@ -6,6 +6,7 @@ version = 4
 name = "OLEDShift"
 version = "1.1.4"
 dependencies = [
+ "cfg-if",
  "lazy_static",
  "libloading",
  "native-windows-gui",
@@ -14,6 +15,7 @@ dependencies = [
  "serde",
  "serde_json",
  "windows",
+ "windows-future",
  "winresource",
 ]
 
@@ -37,9 +39,9 @@ checksum = "7f30e7476521f6f8af1a1c4c0b8cc94f0bee37d91763d0ca2665f299b6cd8aec"
 
 [[package]]
 name = "cfg-if"
-version = "1.0.0"
+version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
+checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
 name = "equivalent"
