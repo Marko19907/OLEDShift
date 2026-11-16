@@ -121,13 +121,10 @@ impl Controller {
                 let mut running = lock.lock().unwrap();
                 *running = false;
                 let (new_running, timeout_result) = cvar.wait_timeout(running, interval).unwrap();
-                running = new_running;
+                drop(new_running);
 
                 if timeout_result.timed_out() {
-                    let controller = controller.lock().unwrap();
-                    if controller.is_running() {
-                        mover::move_all_windows();
-                    }
+                    mover::move_all_windows(|| controller.lock().unwrap().is_running());
                 }
             }
         }).expect("Thread failed to start");
