@@ -19,6 +19,7 @@ pub struct SystemTray {
     tray: nwg::TrayNotification,
     tray_menu: nwg::Menu,
     enabled_toggle: nwg::MenuItem,
+    animate_shifts_toggle: nwg::MenuItem,
     separator_auto_start: nwg::MenuSeparator,
     auto_start_toggle: nwg::MenuItem,
     delay_menu: nwg::Menu,
@@ -69,6 +70,15 @@ impl SystemTray {
         self.controller.lock().unwrap().toggle_running();
         self.update_toggle();
         self.update_tooltip();
+    }
+
+    fn toggle_animate_shifts(&self) {
+        self.controller.lock().unwrap().toggle_animate_shifts();
+        self.update_animate_shifts_toggle();
+    }
+
+    fn update_animate_shifts_toggle(&self) {
+        self.animate_shifts_toggle.set_checked(self.controller.lock().unwrap().animate_shifts());
     }
 
     fn toggle_auto_start(&self) {
@@ -411,6 +421,11 @@ mod system_tray_ui {
                 .parent(&data.tray_menu)
                 .build(&mut data.enabled_toggle)?;
 
+            nwg::MenuItem::builder()
+                .text("Animate shifts")
+                .parent(&data.tray_menu)
+                .build(&mut data.animate_shifts_toggle)?;
+
             nwg::MenuSeparator::builder()
                 .parent(&data.tray_menu)
                 .build(&mut data.separator_auto_start)?;
@@ -536,6 +551,7 @@ mod system_tray_ui {
             ui.inner.update_delay_menu();
             ui.inner.update_distance_menu();
             ui.inner.update_toggle();
+            ui.inner.update_animate_shifts_toggle();
             ui.inner.update_auto_start_toggle();
             ui.inner.update_tooltip();
             update_screens_submenu(&ui.inner);
@@ -569,6 +585,9 @@ mod system_tray_ui {
                         E::OnMenuItemSelected => {
                             if &handle == &evt_ui.enabled_toggle {
                                 SystemTray::toggle_enabled(&evt_ui);
+                            }
+                            else if &handle == &evt_ui.animate_shifts_toggle {
+                                SystemTray::toggle_animate_shifts(&evt_ui);
                             }
                             else if &handle == &evt_ui.auto_start_toggle {
                                 SystemTray::toggle_auto_start(&evt_ui);

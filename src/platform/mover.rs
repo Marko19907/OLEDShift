@@ -22,23 +22,31 @@ use windows::{
         Foundation::{FALSE, HWND, LPARAM, RECT, TRUE},
         Graphics::Gdi::{EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITORINFO, MONITORINFOEXW, MONITOR_DEFAULTTONEAREST, MonitorFromWindow},
         UI::{
+            Shell::{ABM_GETSTATE, ABS_AUTOHIDE, APPBARDATA, SHAppBarMessage},
             WindowsAndMessaging::{
                 EnumWindows,
                 GetClassNameW,
                 GetGUIThreadInfo,
+                GetSystemMetrics,
+                GetWindowPlacement,
                 GetWindowRect,
                 GetWindowThreadProcessId,
                 GUITHREADINFO,
+                HWND_TOP,
                 IsIconic,
                 IsWindowVisible,
                 IsZoomed,
                 SetWindowPos,
+                SM_CYSCREEN,
                 SPI_GETCLIENTAREAANIMATION,
+                SPI_GETWORKAREA,
+                SW_SHOWMAXIMIZED,
                 SWP_ASYNCWINDOWPOS,
                 SWP_NOACTIVATE,
                 SWP_NOSIZE,
                 SWP_NOZORDER,
                 SystemParametersInfoW,
+                WINDOWPLACEMENT,
             },
         },
     },
@@ -68,6 +76,22 @@ struct IsWindowArrangedFn {
 
 /// A function pointer to the IsWindowArranged function in user32.dll
 static IS_WINDOW_ARRANGED: OnceLock<Option<IsWindowArrangedFn>> = OnceLock::new();
+
+fn is_taskbar_auto_hidden() -> bool {
+    let mut app_bar_data: APPBARDATA = unsafe { std::mem::zeroed() };
+    app_bar_data.cbSize = std::mem::size_of::<APPBARDATA>() as u32;
+    let state = unsafe { SHAppBarMessage(ABM_GETSTATE, &mut app_bar_data) as u32 };
+    return (state & ABS_AUTOHIDE) != 0;
+}
+
+fn get_taskbar_height() -> i32 {
+    let mut work_area_rect: RECT = unsafe { mem::zeroed() };
+    unsafe {
+        let _ = SystemParametersInfoW(SPI_GETWORKAREA, 0, Some(&mut work_area_rect as *mut _ as *mut c_void), Default::default());
+    }
+    let screen_height = unsafe { GetSystemMetrics(SM_CYSCREEN) };
+    return screen_height - (work_area_rect.bottom - work_area_rect.top);
+}
 
 /// Loads the undocumented IsWindowArranged function from user32.dll
 /// It's actually provided by the windows crate but I'm leaving it like this to preserve Windows 7 compatibility
@@ -127,6 +151,16 @@ unsafe extern "system" fn enum_display_monitors_callback(
     return TRUE;
 }
 
+/// Returns true if the window is visible.
+fn is_window_visible(hwnd: HWND) -> bool {
+    return unsafe { IsWindowVisible(hwnd) != FALSE };
+}
+
+/// Returns true if the window is maximized.
+fn is_window_maximized(wp: &WINDOWPLACEMENT) -> bool {
+    return wp.showCmd == SW_SHOWMAXIMIZED.0 as u32;
+}
+
 /// Returns true if the window should be excluded from being moved based on its title or class.
 fn is_excluded(hwnd: HWND) -> bool {
     // Get the window class
@@ -157,63 +191,43 @@ fn is_monitor_included(h_monitor: &HMONITOR) -> bool {
     return false;
 }
 
+
 const SHIFT_DURATION: Duration = Duration::from_millis(200);
 const FRAME_INTERVAL: Duration = Duration::from_millis(16);
 
 struct WindowShift {
     hwnd: HWND,
-    thread_id: u32,
     start: (i32, i32),
     target: (i32, i32),
-    confirmed: (i32, i32),
-    pending: Option<(i32, i32)>,
+    last_requested_position: (i32, i32),
 }
 
-impl WindowShift {
-    fn advance(&mut self, progress: f64) -> bool {
-        if !can_move_window(self.hwnd, self.thread_id) {
-            return false;
-        }
-
-        let Some(rect) = window_rect(self.hwnd) else {
-            return false;
-        };
-        let current = (rect.left, rect.top);
-        if self.pending == Some(current) {
-            self.confirmed = current;
-            self.pending = None;
-        } else if current != self.confirmed {
-            // Another app or the user repositioned this window during the shift.
-            return false;
-        }
-
-        // Allow only one outstanding move per window so a busy app cannot
-        // replay a backlog of animation frames when it starts responding.
-        if self.pending.is_some() {
-            return true;
-        }
-
-        let next = position_at(self.start, self.target, progress);
-        if next != current {
-            let result = unsafe {
-                SetWindowPos(
-                    self.hwnd,
-                    None,
-                    next.0,
-                    next.1,
-                    0,
-                    0,
-                    SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS,
-                )
-            };
-            if result.is_err() {
-                return false;
-            }
-            self.pending = Some(next);
-        }
-
-        true
+fn move_shift_to(shift: &mut WindowShift, position: (i32, i32)) -> bool {
+    if !can_move_window(shift.hwnd) {
+        return false;
     }
+
+    if position == shift.last_requested_position {
+        return true;
+    }
+
+    let result = unsafe {
+        SetWindowPos(
+            shift.hwnd,
+            None,
+            position.0,
+            position.1,
+            0,
+            0,
+            SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS,
+        )
+    };
+    if result.is_err() {
+        return false;
+    }
+
+    shift.last_requested_position = position;
+    return true;
 }
 
 fn position_at(start: (i32, i32), target: (i32, i32), progress: f64) -> (i32, i32) {
@@ -224,16 +238,11 @@ fn position_at(start: (i32, i32), target: (i32, i32), progress: f64) -> (i32, i3
     (interpolate(start.0, target.0), interpolate(start.1, target.1))
 }
 
-fn window_rect(hwnd: HWND) -> Option<RECT> {
-    let mut rect = RECT::default();
-    unsafe { GetWindowRect(hwnd, &mut rect) }.ok()?;
-    Some(rect)
-}
-
-fn can_move_window(hwnd: HWND, thread_id: u32) -> bool {
+fn can_move_window(hwnd: HWND) -> bool {
+    let thread_id = unsafe { GetWindowThreadProcessId(hwnd, None) };
     if thread_id == 0
-        || unsafe { GetWindowThreadProcessId(hwnd, None) } != thread_id
-        || unsafe { !IsWindowVisible(hwnd).as_bool() || IsIconic(hwnd).as_bool() || IsZoomed(hwnd).as_bool() }
+        || unsafe { IsIconic(hwnd) != FALSE || IsZoomed(hwnd) != FALSE }
+        || !is_window_visible(hwnd)
         || is_window_snapped(hwnd)
     {
         return false;
@@ -244,72 +253,106 @@ fn can_move_window(hwnd: HWND, thread_id: u32) -> bool {
         ..Default::default()
     };
     let has_thread_info = unsafe { GetGUIThreadInfo(thread_id, &mut info) }.is_ok();
-    !has_thread_info || info.hwndMoveSize != hwnd
+    return !has_thread_info || info.hwndMoveSize != hwnd;
 }
 
-fn plan_window_shift(hwnd: HWND) -> Option<WindowShift> {
-    let thread_id = unsafe { GetWindowThreadProcessId(hwnd, None) };
-    if !can_move_window(hwnd, thread_id) || is_excluded(hwnd) {
-        return None;
+fn move_window(hwnd: HWND, shifts: Option<&mut Vec<WindowShift>>) {
+    if !is_window_visible(hwnd) {
+        return;
     }
 
-    let monitor = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST) };
-    if !is_monitor_included(&monitor) {
-        return None;
-    }
-    let mut info = MONITORINFO {
-        cbSize: mem::size_of::<MONITORINFO>() as u32,
-        ..Default::default()
-    };
-    if !unsafe { GetMonitorInfoW(monitor, &mut info) }.as_bool() {
-        return None;
+    let mut wp: WINDOWPLACEMENT = unsafe { mem::zeroed() };
+    wp.length = mem::size_of::<WINDOWPLACEMENT>() as u32;
+    unsafe {
+        let _ = GetWindowPlacement(hwnd, &mut wp);
     }
 
-    let rect = window_rect(hwnd)?;
-    let width = rect.right - rect.left;
-    let height = rect.bottom - rect.top;
-    let bounds = info.rcMonitor;
-    let work = info.rcWork;
-    if width > bounds.right - bounds.left || height > bounds.bottom - bounds.top {
-        return None;
+    if is_window_maximized(&wp) || is_window_snapped(hwnd) || is_excluded(hwnd) {
+        return;
+    }
+
+    let h_monitor = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST) };
+
+    if !is_monitor_included(&h_monitor) {
+        return;
+    }
+
+    let mut monitor_info: MONITORINFO = unsafe { mem::zeroed() };
+    monitor_info.cbSize = mem::size_of::<MONITORINFO>() as u32;
+    unsafe {
+        let _ = GetMonitorInfoW(h_monitor, &mut monitor_info);
+    }
+
+    let screen_width = monitor_info.rcMonitor.right - monitor_info.rcMonitor.left;
+    let screen_height = monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top;
+    let window_width = wp.rcNormalPosition.right - wp.rcNormalPosition.left;
+    let window_height = wp.rcNormalPosition.bottom - wp.rcNormalPosition.top;
+
+    // Check if the window is smaller than the screen, might not be true if the window is a game
+    if !(window_width <= screen_width && window_height <= screen_height) {
+        return;
     }
 
     let (max_x, max_y) = MAX_MOVE.lock().map(|guard| *guard).unwrap_or((50, 50));
-    let mut rng = rand::rng();
-    let mut target_axis = |start: i32, size, distance: i32, work: (i32, i32), monitor| {
-        let (min, max) = if size <= work.1 - work.0 {
-            work
-        } else {
-            monitor
-        };
-        let distance = distance.clamp(0, max - min - size);
-        (start + rng.random_range(-distance..=distance)).clamp(min, max - size)
-    };
-    let start = (rect.left, rect.top);
-    let target = (
-        target_axis(start.0, width, max_x, (work.left, work.right), (bounds.left, bounds.right)),
-        target_axis(start.1, height, max_y, (work.top, work.bottom), (bounds.top, bounds.bottom)),
-    );
 
-    (start != target).then_some(WindowShift {
-        hwnd,
-        thread_id,
-        start,
-        target,
-        confirmed: start,
-        pending: None,
-    })
+    let max_move_x = i32::min(max_x, screen_width - window_width);
+    let max_move_y = i32::min(max_y, screen_height - window_height);
+
+    let mut rng = rand::thread_rng();
+    let random_x = wp.rcNormalPosition.left + rng.gen_range(0..(2 * max_move_x + 1)) - max_move_x;
+    let random_y = wp.rcNormalPosition.top + rng.gen_range(0..(2 * max_move_y + 1)) - max_move_y;
+
+    let random_x = i32::max(monitor_info.rcMonitor.left, i32::min(random_x, monitor_info.rcMonitor.right - window_width));
+    let mut random_y = i32::max(monitor_info.rcMonitor.top, i32::min(random_y, monitor_info.rcMonitor.bottom - window_height));
+
+    let taskbar_height = get_taskbar_height();
+
+    if is_taskbar_auto_hidden() {
+        random_y = i32::max(random_y, monitor_info.rcMonitor.top + taskbar_height);
+    } else {
+        random_y = i32::min(random_y, monitor_info.rcMonitor.bottom - window_height - taskbar_height);
+    }
+
+    let mut current_rect: RECT = unsafe { mem::zeroed() };
+    let has_current_rect = unsafe { GetWindowRect(hwnd, &mut current_rect) }.is_ok();
+
+    if let Some(shifts) = shifts {
+        let start = (current_rect.left, current_rect.top);
+        let target = (random_x, random_y);
+        if has_current_rect && start != target {
+            shifts.push(WindowShift {
+                hwnd,
+                start,
+                target,
+                last_requested_position: start,
+            });
+        }
+        return;
+    }
+
+    let (current_width, current_height) = if has_current_rect {
+        (
+            current_rect.right - current_rect.left,
+            current_rect.bottom - current_rect.top,
+        )
+    } else {
+        (window_width, window_height)
+    };
+
+    unsafe {
+        let _ = SetWindowPos(hwnd, Some(HWND_TOP), random_x, random_y, current_width, current_height, SWP_NOSIZE | SWP_NOZORDER);
+    }
+
+    return;
 }
 
 unsafe extern "system" fn enum_windows_proc(hwnd: HWND, context: LPARAM) -> BOOL {
-    let shifts = unsafe { &mut *(context.0 as *mut Vec<WindowShift>) };
-    if let Some(shift) = plan_window_shift(hwnd) {
-        shifts.push(shift);
-    }
-    TRUE
+    let shifts = unsafe { (context.0 as *mut Vec<WindowShift>).as_mut() };
+    move_window(hwnd, shifts);
+    return TRUE;
 }
 
-fn animations_enabled() -> bool {
+fn windows_animations_enabled() -> bool {
     let mut enabled = FALSE;
     unsafe {
         SystemParametersInfoW(
@@ -322,39 +365,47 @@ fn animations_enabled() -> bool {
     .is_ok() && enabled.as_bool()
 }
 
-pub fn move_all_windows(is_running: impl Fn() -> bool) {
-    if !is_running() {
+pub fn move_all_windows(animate: bool) {
+    if !animate || !windows_animations_enabled() {
+        unsafe {
+            let _ = EnumWindows(Some(enum_windows_proc), LPARAM(0));
+        }
         return;
     }
 
-    let mut shifts = Vec::<WindowShift>::new();
+    let mut shifts: Vec<WindowShift> = Vec::new();
     unsafe {
         let _ = EnumWindows(
             Some(enum_windows_proc),
-            LPARAM(&mut shifts as *mut Vec<WindowShift> as isize),
+            LPARAM(&mut shifts as *mut _ as isize),
         );
     }
-
-    let duration = if animations_enabled() {
-        SHIFT_DURATION
-    } else {
-        Duration::ZERO
-    };
-    animate_shifts(shifts, duration, is_running);
+    animate_window_shifts(shifts);
 }
 
-fn animate_shifts(mut shifts: Vec<WindowShift>, duration: Duration, is_running: impl Fn() -> bool) {
+fn animate_window_shifts(mut shifts: Vec<WindowShift>) {
     let started = Instant::now();
-    while !shifts.is_empty() && is_running() {
+    while !shifts.is_empty() {
         let elapsed = started.elapsed();
-        let finished = elapsed >= duration;
-        let progress = if finished { 1.0 } else { elapsed.as_secs_f64() / duration.as_secs_f64() };
-        shifts.retain_mut(|shift| shift.advance(progress));
-        if finished || shifts.is_empty() {
+        if elapsed >= SHIFT_DURATION {
             break;
         }
 
-        let next_frame = (elapsed + FRAME_INTERVAL).min(duration);
+        let progress = elapsed.as_secs_f64() / SHIFT_DURATION.as_secs_f64();
+        shifts.retain_mut(|shift| {
+            let position = position_at(shift.start, shift.target, progress);
+            return move_shift_to(shift, position);
+        });
+
+        if shifts.is_empty() {
+            break;
+        }
+
+        let next_frame = (elapsed + FRAME_INTERVAL).min(SHIFT_DURATION);
         thread::sleep(next_frame.saturating_sub(started.elapsed()));
+    }
+
+    for shift in &mut shifts {
+        move_shift_to(shift, shift.target);
     }
 }
