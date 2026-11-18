@@ -121,12 +121,16 @@ impl Controller {
                 let mut running = lock.lock().unwrap();
                 *running = false;
                 let (new_running, timeout_result) = cvar.wait_timeout(running, interval).unwrap();
-                running = new_running;
+                drop(new_running);
 
                 if timeout_result.timed_out() {
-                    let controller = controller.lock().unwrap();
-                    if controller.is_running() {
-                        mover::move_all_windows();
+                    // Copy settings and release the locks before moving windows so the tray stays responsive.
+                    let (running, animate) = {
+                        let controller = controller.lock().unwrap();
+                        (controller.is_running(), controller.is_animation_enabled())
+                    };
+                    if running {
+                        mover::move_all_windows(animate);
                     }
                 }
             }
@@ -155,6 +159,14 @@ impl Controller {
         let mut running = lock.lock().unwrap();
         *running = true;
         cvar.notify_all();
+    }
+
+    pub fn is_animation_enabled(&self) -> bool {
+        return self.settings_manager.is_animation_enabled();
+    }
+
+    pub fn toggle_animate_shifts(&mut self) {
+        self.settings_manager.toggle_animate_shifts();
     }
 
     pub fn get_max_move(&self) -> (i32, i32) {

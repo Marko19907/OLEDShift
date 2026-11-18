@@ -8,7 +8,9 @@ use std::{
     os::{
         windows::ffi::OsStringExt
     },
-    sync::OnceLock
+    sync::OnceLock,
+    thread,
+    time::{Duration, Instant},
 };
 
 use lazy_static::lazy_static;
@@ -24,15 +26,23 @@ use windows::{
             WindowsAndMessaging::{
                 EnumWindows,
                 GetClassNameW,
+                GetGUIThreadInfo,
                 GetSystemMetrics,
                 GetWindowPlacement,
                 GetWindowRect,
+                GetWindowThreadProcessId,
+                GUITHREADINFO,
                 HWND_TOP,
+                IsIconic,
                 IsWindowVisible,
+                IsZoomed,
                 SetWindowPos,
                 SM_CYSCREEN,
+                SPI_GETCLIENTAREAANIMATION,
                 SPI_GETWORKAREA,
                 SW_SHOWMAXIMIZED,
+                SWP_ASYNCWINDOWPOS,
+                SWP_NOACTIVATE,
                 SWP_NOSIZE,
                 SWP_NOZORDER,
                 SystemParametersInfoW,
@@ -182,7 +192,78 @@ fn is_monitor_included(h_monitor: &HMONITOR) -> bool {
 }
 
 
-fn move_window(hwnd: HWND) {
+const SHIFT_DURATION: Duration = Duration::from_millis(200);
+const FRAME_INTERVAL: Duration = Duration::from_millis(16);
+
+struct WindowShift {
+    hwnd: HWND,
+    start: (i32, i32),
+    target: (i32, i32),
+    // Used to skip duplicate position requests between frames.
+    last_requested_position: (i32, i32),
+}
+
+/// Requests the position and returns whether this shift can continue.
+fn move_shift_to(shift: &mut WindowShift, position: (i32, i32)) -> bool {
+    if !can_animate_window(shift.hwnd) {
+        return false;
+    }
+
+    if position == shift.last_requested_position {
+        return true;
+    }
+
+    let result = unsafe {
+        SetWindowPos(
+            shift.hwnd,
+            None,
+            position.0,
+            position.1,
+            0,
+            0,
+            SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS,
+        )
+    };
+    if result.is_err() {
+        return false;
+    }
+
+    shift.last_requested_position = position;
+    return true;
+}
+
+fn position_at(start: (i32, i32), target: (i32, i32), progress: f64) -> (i32, i32) {
+    // Smoothstep gives an ease-in/ease-out transition.
+    let eased = progress * progress * (3.0 - 2.0 * progress);
+    let interpolate = |from: i32, to: i32| {
+        (f64::from(from) + (f64::from(to) - f64::from(from)) * eased).round() as i32
+    };
+    return (interpolate(start.0, target.0), interpolate(start.1, target.1));
+}
+
+fn can_animate_window(hwnd: HWND) -> bool {
+    let thread_id = unsafe { GetWindowThreadProcessId(hwnd, None) };
+    if thread_id == 0
+        || unsafe { IsIconic(hwnd) != FALSE || IsZoomed(hwnd) != FALSE }
+        || !is_window_visible(hwnd)
+        || is_window_snapped(hwnd)
+    {
+        return false;
+    }
+
+    let mut info = GUITHREADINFO {
+        cbSize: mem::size_of::<GUITHREADINFO>() as u32,
+        ..Default::default()
+    };
+    if unsafe { GetGUIThreadInfo(thread_id, &mut info) }.is_err() {
+        // Continue using the eligibility checks above if the drag/resize state is unavailable.
+        return true;
+    }
+    return info.hwndMoveSize != hwnd;
+}
+
+/// Moves immediately, or appends an animation plan when a collection is supplied.
+fn move_window(hwnd: HWND, animation_shifts: Option<&mut Vec<WindowShift>>) {
     if !is_window_visible(hwnd) {
         return;
     }
@@ -240,7 +321,23 @@ fn move_window(hwnd: HWND) {
     }
 
     let mut current_rect: RECT = unsafe { mem::zeroed() };
-    let (current_width, current_height) = if unsafe { GetWindowRect(hwnd, &mut current_rect) }.is_ok() {
+    let has_current_rect = unsafe { GetWindowRect(hwnd, &mut current_rect) }.is_ok();
+
+    if let Some(animation_shifts) = animation_shifts {
+        let start = (current_rect.left, current_rect.top);
+        let target = (random_x, random_y);
+        if has_current_rect && start != target {
+            animation_shifts.push(WindowShift {
+                hwnd,
+                start,
+                target,
+                last_requested_position: start,
+            });
+        }
+        return;
+    }
+
+    let (current_width, current_height) = if has_current_rect {
         (
             current_rect.right - current_rect.left,
             current_rect.bottom - current_rect.top,
@@ -256,14 +353,68 @@ fn move_window(hwnd: HWND) {
     return;
 }
 
-unsafe extern "system" fn enum_windows_proc(hwnd: HWND, _: LPARAM) -> BOOL {
-    move_window(hwnd);
+unsafe extern "system" fn enum_windows_proc(hwnd: HWND, context: LPARAM) -> BOOL {
+    // move_all_windows supplies zero for immediate moves, or a vector valid for the enumeration.
+    let animation_shifts = unsafe { (context.0 as *mut Vec<WindowShift>).as_mut() };
+    move_window(hwnd, animation_shifts);
     return TRUE;
 }
 
-/// Moves the windows just once.
-pub fn move_all_windows() {
+fn windows_animations_enabled() -> bool {
+    let mut enabled = FALSE;
+    let result = unsafe {
+        SystemParametersInfoW(
+            SPI_GETCLIENTAREAANIMATION,
+            0,
+            Some((&mut enabled as *mut BOOL).cast::<c_void>()),
+            Default::default(),
+        )
+    };
+    return result.is_ok() && enabled != FALSE;
+}
+
+pub fn move_all_windows(animate: bool) {
+    if !animate || !windows_animations_enabled() {
+        unsafe {
+            let _ = EnumWindows(Some(enum_windows_proc), LPARAM(0));
+        }
+        return;
+    }
+
+    let mut shifts: Vec<WindowShift> = Vec::new();
     unsafe {
-        let _ = EnumWindows(Some(enum_windows_proc), LPARAM(0));
+        let _ = EnumWindows(
+            Some(enum_windows_proc),
+            LPARAM(&mut shifts as *mut _ as isize),
+        );
+    }
+    animate_window_shifts(shifts);
+}
+
+fn animate_window_shifts(mut shifts: Vec<WindowShift>) {
+    let started = Instant::now();
+    while !shifts.is_empty() {
+        let elapsed = started.elapsed();
+        if elapsed >= SHIFT_DURATION {
+            break;
+        }
+
+        let progress = elapsed.as_secs_f64() / SHIFT_DURATION.as_secs_f64();
+        shifts.retain_mut(|shift| {
+            let position = position_at(shift.start, shift.target, progress);
+            return move_shift_to(shift, position);
+        });
+
+        if shifts.is_empty() {
+            break;
+        }
+
+        let next_frame = (elapsed + FRAME_INTERVAL).min(SHIFT_DURATION);
+        thread::sleep(next_frame.saturating_sub(started.elapsed()));
+    }
+
+    // Request the final destination even when the last timed frame fell short.
+    for shift in &mut shifts {
+        move_shift_to(shift, shift.target);
     }
 }

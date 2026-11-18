@@ -10,6 +10,8 @@ use crate::config::settings_path::settings_path;
 #[derive(Serialize, Deserialize)]
 pub struct Settings {
     running: bool,
+    #[serde(default)]
+    animate_shifts: bool,
     delay_milliseconds: i32,
     max_distance_x: i32,
     max_distance_y: i32,
@@ -31,6 +33,7 @@ impl Settings {
         // The default settings
         return Settings {
             running: true,
+            animate_shifts: false,
             delay_milliseconds: Delays::ThirtySeconds as i32,
             max_distance_x: 50,
             max_distance_y: 50,
@@ -203,6 +206,17 @@ impl SettingsManager {
     pub fn toggle_running(&self) {
         let mut settings = self.settings.lock().unwrap();
         settings.running = !settings.running;
+        SettingsManager::save_settings(&*settings);
+    }
+
+    pub fn is_animation_enabled(&self) -> bool {
+        let settings = self.settings.lock().unwrap();
+        return settings.animate_shifts;
+    }
+
+    pub fn toggle_animate_shifts(&self) {
+        let mut settings = self.settings.lock().unwrap();
+        settings.animate_shifts = !settings.animate_shifts;
         SettingsManager::save_settings(&*settings);
     }
 
