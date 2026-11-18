@@ -209,7 +209,7 @@ impl SettingsManager {
         SettingsManager::save_settings(&*settings);
     }
 
-    pub fn animate_shifts(&self) -> bool {
+    pub fn is_animation_enabled(&self) -> bool {
         let settings = self.settings.lock().unwrap();
         return settings.animate_shifts;
     }

@@ -78,7 +78,7 @@ impl SystemTray {
     }
 
     fn update_animate_shifts_toggle(&self) {
-        self.animate_shifts_toggle.set_checked(self.controller.lock().unwrap().animate_shifts());
+        self.animate_shifts_toggle.set_checked(self.controller.lock().unwrap().is_animation_enabled());
     }
 
     fn toggle_auto_start(&self) {

@@ -124,9 +124,10 @@ impl Controller {
                 drop(new_running);
 
                 if timeout_result.timed_out() {
+                    // Copy settings and release the locks before moving windows so the tray stays responsive.
                     let (running, animate) = {
                         let controller = controller.lock().unwrap();
-                        (controller.is_running(), controller.animate_shifts())
+                        (controller.is_running(), controller.is_animation_enabled())
                     };
                     if running {
                         mover::move_all_windows(animate);
@@ -160,8 +161,8 @@ impl Controller {
         cvar.notify_all();
     }
 
-    pub fn animate_shifts(&self) -> bool {
-        return self.settings_manager.animate_shifts();
+    pub fn is_animation_enabled(&self) -> bool {
+        return self.settings_manager.is_animation_enabled();
     }
 
     pub fn toggle_animate_shifts(&mut self) {

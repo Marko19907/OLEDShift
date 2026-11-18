@@ -199,11 +199,13 @@ struct WindowShift {
     hwnd: HWND,
     start: (i32, i32),
     target: (i32, i32),
+    // Used to skip duplicate position requests between frames.
     last_requested_position: (i32, i32),
 }
 
+/// Requests the position and returns whether this shift can continue.
 fn move_shift_to(shift: &mut WindowShift, position: (i32, i32)) -> bool {
-    if !can_move_window(shift.hwnd) {
+    if !can_animate_window(shift.hwnd) {
         return false;
     }
 
@@ -231,14 +233,15 @@ fn move_shift_to(shift: &mut WindowShift, position: (i32, i32)) -> bool {
 }
 
 fn position_at(start: (i32, i32), target: (i32, i32), progress: f64) -> (i32, i32) {
+    // Smoothstep gives an ease-in/ease-out transition.
     let eased = progress * progress * (3.0 - 2.0 * progress);
     let interpolate = |from: i32, to: i32| {
         (f64::from(from) + (f64::from(to) - f64::from(from)) * eased).round() as i32
     };
-    (interpolate(start.0, target.0), interpolate(start.1, target.1))
+    return (interpolate(start.0, target.0), interpolate(start.1, target.1));
 }
 
-fn can_move_window(hwnd: HWND) -> bool {
+fn can_animate_window(hwnd: HWND) -> bool {
     let thread_id = unsafe { GetWindowThreadProcessId(hwnd, None) };
     if thread_id == 0
         || unsafe { IsIconic(hwnd) != FALSE || IsZoomed(hwnd) != FALSE }
@@ -252,11 +255,15 @@ fn can_move_window(hwnd: HWND) -> bool {
         cbSize: mem::size_of::<GUITHREADINFO>() as u32,
         ..Default::default()
     };
-    let has_thread_info = unsafe { GetGUIThreadInfo(thread_id, &mut info) }.is_ok();
-    return !has_thread_info || info.hwndMoveSize != hwnd;
+    if unsafe { GetGUIThreadInfo(thread_id, &mut info) }.is_err() {
+        // Continue using the eligibility checks above if the drag/resize state is unavailable.
+        return true;
+    }
+    return info.hwndMoveSize != hwnd;
 }
 
-fn move_window(hwnd: HWND, shifts: Option<&mut Vec<WindowShift>>) {
+/// Moves immediately, or appends an animation plan when a collection is supplied.
+fn move_window(hwnd: HWND, animation_shifts: Option<&mut Vec<WindowShift>>) {
     if !is_window_visible(hwnd) {
         return;
     }
@@ -316,11 +323,11 @@ fn move_window(hwnd: HWND, shifts: Option<&mut Vec<WindowShift>>) {
     let mut current_rect: RECT = unsafe { mem::zeroed() };
     let has_current_rect = unsafe { GetWindowRect(hwnd, &mut current_rect) }.is_ok();
 
-    if let Some(shifts) = shifts {
+    if let Some(animation_shifts) = animation_shifts {
         let start = (current_rect.left, current_rect.top);
         let target = (random_x, random_y);
         if has_current_rect && start != target {
-            shifts.push(WindowShift {
+            animation_shifts.push(WindowShift {
                 hwnd,
                 start,
                 target,
@@ -347,22 +354,23 @@ fn move_window(hwnd: HWND, shifts: Option<&mut Vec<WindowShift>>) {
 }
 
 unsafe extern "system" fn enum_windows_proc(hwnd: HWND, context: LPARAM) -> BOOL {
-    let shifts = unsafe { (context.0 as *mut Vec<WindowShift>).as_mut() };
-    move_window(hwnd, shifts);
+    // move_all_windows supplies zero for immediate moves, or a vector valid for the enumeration.
+    let animation_shifts = unsafe { (context.0 as *mut Vec<WindowShift>).as_mut() };
+    move_window(hwnd, animation_shifts);
     return TRUE;
 }
 
 fn windows_animations_enabled() -> bool {
     let mut enabled = FALSE;
-    unsafe {
+    let result = unsafe {
         SystemParametersInfoW(
             SPI_GETCLIENTAREAANIMATION,
             0,
             Some((&mut enabled as *mut BOOL).cast::<c_void>()),
             Default::default(),
         )
-    }
-    .is_ok() && enabled.as_bool()
+    };
+    return result.is_ok() && enabled != FALSE;
 }
 
 pub fn move_all_windows(animate: bool) {
@@ -405,6 +413,7 @@ fn animate_window_shifts(mut shifts: Vec<WindowShift>) {
         thread::sleep(next_frame.saturating_sub(started.elapsed()));
     }
 
+    // Request the final destination even when the last timed frame fell short.
     for shift in &mut shifts {
         move_shift_to(shift, shift.target);
     }
